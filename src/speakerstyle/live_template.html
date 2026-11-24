@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__NAME__ · live</title>
+<script type="importmap">
+{ "imports": {
+  "react": "https://esm.sh/react@19.1.0",
+  "react/jsx-runtime": "https://esm.sh/react@19.1.0/jsx-runtime",
+  "react-dom/client": "https://esm.sh/react-dom@19.1.0/client?external=react",
+  "@paper-design/shaders-react": "https://esm.sh/@paper-design/shaders-react@0.0.82?external=react,react-dom",
+  "htm": "https://esm.sh/htm@3.1.1"
+} }
+</script>
+<style>
+  :root { --bg: __BG__; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.4 system-ui, sans-serif; background: #111; color: #eee; }
+  header { display: flex; gap: 16px; align-items: center; padding: 16px 24px; flex-wrap: wrap; }
+  header h1 { font-size: 16px; margin: 0 auto 0 0; font-weight: 600; }
+  label { display: inline-flex; gap: 8px; align-items: center; color: #aaa; }
+  h2 { font-size: 13px; font-weight: 600; color: #999; text-transform: uppercase; letter-spacing: .06em; margin: 8px 24px 12px; }
+  main { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 20px; padding: 0 24px 28px; }
+  figure { margin: 0; }
+  .stage { position: relative; aspect-ratio: __ASPECT__; background: var(--bg); border-radius: 12px; overflow: hidden; }
+  .stage > * { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .stage img { object-fit: contain; pointer-events: none; }
+  .echo { -webkit-mask: url("__LAYERS__/silhouette.png") center / contain no-repeat; mask: url("__LAYERS__/silhouette.png") center / contain no-repeat; }
+  figcaption { padding: 8px 2px; }
+  figcaption b { display: block; color: #fff; }
+  figcaption span { color: #999; }
+  .tag { font-size: 11px; color: #111; background: #b8f36b; border-radius: 4px; padding: 1px 6px; margin-left: 6px; vertical-align: 1px; }
+  .tag.cut { background: #555; color: #ddd; }
+</style>
+</head>
+<body>
+<header>
+  <h1>__NAME__ · enhanced (experimental)</h1>
+  <label>Event background <input id="bg" type="color" value="__BG__"></label>
+</header>
+<div id="root"></div>
+
+<script type="module">
+import React, { useEffect, useRef, useState } from "react";
+import { createRoot } from "react-dom/client";
+import { LiquidMetal, Heatmap, Dithering } from "@paper-design/shaders-react";
+import htm from "htm";
+const html = htm.bind(React.createElement);
+
+const DIR = "__LAYERS__/";
+// ?t=2.3 freezes time (frame export, checks); ?slip=0.8,0.8 holds Riso Slip plates off register
+const Q = new URLSearchParams(location.search);
+const FIXED_T = Q.has("t") ? parseFloat(Q.get("t")) : null;
+const FIXED_SLIP = Q.has("slip") ? Q.get("slip").split(",").map(Number) : null;
+const META = __META__;
+
+// ------------------------------------------------------------------ colour helpers
+const hex2rgb = h => h.replace("#", "").match(/../g).map(x => parseInt(x, 16) / 255);
+const rgb2hex = c => "#" + c.map(v => Math.round(Math.min(1, Math.max(0, v)) * 255).toString(16).padStart(2, "0")).join("");
+function rgb2hsl([r, g, b]) {
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
+  if (mx === mn) return [0, 0, l];
+  const d = mx - mn, s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+  const h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [h / 6, s, l];
+}
+function hsl2rgb([h, s, l]) {
+  if (s === 0) return [l, l, l];
+  const f = (p, q, t) => { t = (t + 1) % 1; return t < 1 / 6 ? p + (q - p) * 6 * t : t < 1 / 2 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p; };
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+  return [f(p, q, h + 1 / 3), f(p, q, h), f(p, q, h - 1 / 3)];
+}
+const luminance = c => { const [r, g, b] = c.map(v => v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+// accent plate: the event colour pushed away from the background in lightness, so it shows on any bg
+function accentFor(bg) {
+  const [h, s, l] = rgb2hsl(hex2rgb(bg));
+  return hsl2rgb([h, Math.max(s, 0.55), l > 0.5 ? Math.max(0, l - 0.3) : Math.min(1, l + 0.3)]);
+}
+const mix = (hex, to, t) => rgb2hex(hex2rgb(hex).map((v, i) => v + (hex2rgb(to)[i] - v) * t));
+const auraColors = bg => [mix(bg, "#000000", 0.6), mix(bg, "#000000", 0.25), bg, mix(bg, "#ffffff", 0.35), mix(bg, "#ffffff", 0.7), "#ffffff"];
+
+// ------------------------------------------------------------------ own shader, all modes
+// Every mode reads the pipeline's zone map: R ink, G halftone grey, B paper, A silhouette.
+// Ink and paper are the likeness; modes animate around them.
+const FRAG = `#version 300 es
+precision highp float;
+uniform sampler2D u_zones;
+uniform vec2 u_res, u_tex, u_mouse, u_slip;
+uniform float u_cell, u_angle, u_grey, u_time, u_mode, u_faceH, u_hover;
+uniform vec4 u_eyes;
+uniform vec3 u_ink, u_paper, u_accent;
+out vec4 o;
+const float PI = 3.14159265;
+float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+vec4 Z(vec2 uv){ return (uv.x < 0. || uv.y < 0. || uv.x > 1. || uv.y > 1.) ? vec4(0) : texture(u_zones, uv); }
+float on(float v){ return smoothstep(0.45, 0.55, v); }
+
+void main(){
+  vec2 frag = vec2(gl_FragCoord.x, u_res.y - gl_FragCoord.y);
+  float s = min(u_res.x / u_tex.x, u_res.y / u_tex.y);
+  vec2 off = (u_res - u_tex * s) * 0.5;
+  vec2 px = (frag - off) / s;
+  float ca = cos(u_angle), sa = sin(u_angle);
+  mat2 R = mat2(ca, -sa, sa, ca);
+  vec2 axis = vec2(ca, sa);
+
+  // Xerox paper-feed micro-tick: nudge along the scan axis for two frames
+  float tx = mod(u_time, 4.8);
+  if (u_mode > 3.5 && tx > 2.9 && tx < 3.05) px -= axis * 1.5 / s;
+
+  vec2 uv = px / u_tex;
+  vec4 z = Z(uv);
+  vec2 eL = u_eyes.xy * u_tex, eR = u_eyes.zw * u_tex;
+  float eyeD = min(distance(px, eL), distance(px, eR)) / u_faceH;
+  vec2 c = R * px / u_cell;
+  vec2 id = floor(c + 0.5);
+  float r = length(c - id);
+  float aa = fwidth(r) * 0.8;
+  float r0 = sqrt(u_grey / PI);
+  float inkM = on(z.r), greyM = on(z.g);
+  float alpha = z.a;
+  float ink = 0.0;
+  vec3 col;
+  float accentAmt = 0.0;
+
+  if (u_mode < 0.5) {
+    // ---------------- 1 Breathe: one broad tonal tide, eyes held still; hover opens a spotlight
+    float d = distance(px, (eL + eR) * 0.5) / u_faceH;
+    float damp = smoothstep(0.12, 0.35, eyeD);
+    float cov = u_grey * (1.0 + 0.18 * sin(u_time * 1.15 - d * 1.8) * damp);
+    if (u_hover > 0.001) {
+      float m = distance(px, u_mouse) / u_faceH;
+      cov -= 0.45 * u_grey * u_hover * exp(-m * m / 0.125);
+    }
+    cov = clamp(cov, 0.08, 0.72);
+    ink = inkM + greyM * smoothstep(sqrt(cov / PI) + aa, sqrt(cov / PI) - aa, r);
+
+  } else if (u_mode < 1.5) {
+    // ---------------- 2 Print: starts finished, wipes out along the screen axis, re-prints plates
+    float t = mod(u_time, 4.5);
+    float diag = dot(px - 0.5 * u_tex, axis) / length(u_tex) + 0.5;        // 0..1 along 45 deg
+    float dotFull = smoothstep(r0 + aa, r0 - aa, r);
+    if (t < 2.0) {
+      ink = inkM + greyM * dotFull;
+    } else if (t < 2.45) {
+      float wiped = step(diag + hash(id) * 0.05, (t - 2.0) / 0.45 * 1.1);
+      ink = (1.0 - wiped) * (inkM + greyM * dotFull);
+    } else {
+      float g = smoothstep(0.0, 1.0, ((t - 2.45) - (diag * 0.4 + hash(id) * 0.22)) / 0.25);
+      float dotGrow = smoothstep(r0 * g + aa, r0 * g - aa, r);
+      float stipple = hash(floor(px / 2.0));
+      float stamp = step(diag + stipple * 0.08, (t - 2.9) / 0.5);           // hard ink plate, diagonal press
+      ink = inkM * stamp + greyM * dotGrow;
+    }
+
+  } else if (u_mode < 2.5) {
+    // ---------------- 5 Ink Beads: grey dots become ink droplets that bridge and pinch (1-bit metaballs)
+    float dotVal = 0.0;
+    if (greyM > 0.001 && inkM < 0.999) {
+      float eyeSafe = smoothstep(0.16, 0.42, eyeD);
+      float ph = u_time * 1.5707963;
+      vec2 p = px / u_faceH;
+      float wave = 0.5 + 0.5 * sin(dot(p, vec2(2.1, 1.3)) - ph + 0.55 * sin(p.y * 3.2 + ph));
+      float wet = mix(0.20, 1.0, wave) * mix(0.15, 1.0, eyeSafe);
+      if (u_hover > 0.001) {
+        float m = distance(px, u_mouse) / u_faceH;
+        wet = max(wet, u_hover * exp(-m * m / 0.08) * mix(0.25, 1.0, eyeSafe));
+      }
+      float rr = sqrt(clamp(u_grey, 0.05, 0.65) / PI);
+      float gap = max(1.0 - 2.0 * rr, 0.18);
+      float k = mix(24.0, 3.2 / gap, wet);
+      float dArr[9];
+      float dMin = 1e6;
+      int idx = 0;
+      for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+        vec2 nid = id + vec2(i, j);
+        float a1 = dot(nid, vec2(1.65, 0.95)) + ph;
+        float a2 = dot(nid, vec2(-0.91, 1.57)) - ph;
+        vec2 disp = vec2(sin(a1), cos(a2)) * (0.27 * wet);
+        float rad = rr * (1.0 + 0.14 * wet * sin(a1 - a2));
+        float d = length(c - (nid + disp)) - rad;
+        dArr[idx++] = d;
+        dMin = min(dMin, d);
+      }
+      float sumExp = 0.0;
+      for (int n = 0; n < 9; n++) sumExp += exp(-k * (dArr[n] - dMin));
+      float dS = dMin - log(sumExp) / k + 0.014 * wet;
+      float a2a = fwidth(dS) * 0.8;
+      dotVal = smoothstep(a2a, -a2a, dS);
+    }
+    ink = inkM + greyM * dotVal;
+
+  } else if (u_mode < 3.5) {
+    // ---------------- 6 Riso Slip: plates slip out of register along the pointer, ink stays locked
+    vec2 v = u_slip;
+    float eyeLock = smoothstep(0.22, 0.55, eyeD);
+    float underA = step(0.5, Z(uv + v * 0.022 * u_faceH / u_tex).a);
+    float paperA = step(0.5, Z(uv - v * 0.007 * eyeLock * u_faceH / u_tex).a);
+    vec2 c2 = R * (px + v * u_cell * 1.4) / u_cell;
+    float r2 = length(c2 - floor(c2 + 0.5));
+    float dot2 = smoothstep(r0 + aa, r0 - aa, r2);
+    float inkHere = clamp(step(0.5, z.r) + step(0.5, z.g) * dot2, 0.0, 1.0) * step(0.5, z.a);
+    col = mix(u_accent, u_paper, paperA);
+    col = mix(col, u_ink, inkHere);
+    alpha = max(underA, max(paperA, step(0.5, z.a) * inkHere));
+    o = vec4(col * alpha, alpha);
+    return;
+
+  } else {
+    // ---------------- 7 Xerox Sweep: copier exposure slit glides along the screen axis, 4.8 s loop
+    float t = tx;
+    float L = 0.5 * length(u_tex) / u_faceH + 0.3;
+    float act = step(1.7, t) * step(t, 2.95);
+    float u = mix(-L, L, smoothstep(1.7, 2.9, t));
+    float sc = dot(px - 0.5 * u_tex, axis) / u_faceH;
+    float ds = sc - u;
+    float flash = exp(-pow((ds - 0.04) / 0.07, 2.0)) * act;
+    float surge = exp(-pow((ds + 0.08) / 0.06, 2.0)) * act;
+    float eyeSafe = smoothstep(0.14, 0.28, eyeD);
+    vec2 suv = uv + vec2((hash(vec2(floor(px.y / 3.0), floor(u_time * 24.0))) - 0.5) * 0.004 * surge * eyeSafe, 0.0);
+    vec4 zz = Z(suv);
+    float cov = u_grey * clamp(1.0 - 0.65 * flash * (0.4 + 0.6 * eyeSafe) + 0.25 * surge * eyeSafe, 0.25, 1.35);
+    cov = min(cov, 0.72);
+    float rad = sqrt(cov / PI);
+    ink = on(zz.r) + on(zz.g) * smoothstep(rad + aa, rad - aa, r);
+    float lw = abs(ds) / max(fwidth(ds), 1e-5);
+    accentAmt = (1.0 - smoothstep(0.6, 1.4, lw)) * eyeSafe * act * step(0.5, z.a);
+  }
+
+  col = mix(u_paper, u_ink, clamp(ink, 0.0, 1.0));
+  col = mix(col, u_accent, accentAmt);
+  o = vec4(col * alpha, alpha);
+}`;
+const VERT = `#version 300 es
+in vec2 p; void main(){ gl_Position = vec4(p, 0., 1.); }`;
+
+function useHalftone(canvasRef, mode, accent) {
+  const accentRef = useRef(accent);
+  accentRef.current = accent;
+  useEffect(() => {
+    const cv = canvasRef.current;
+    const gl = cv.getContext("webgl2", { premultipliedAlpha: true, alpha: true });
+    if (!gl) throw new Error("WebGL2 not available");
+    const sh = (t, src) => { const s = gl.createShader(t); gl.shaderSource(s, src); gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+    const pr = gl.createProgram();
+    gl.attachShader(pr, sh(gl.VERTEX_SHADER, VERT)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, FRAG));
+    gl.linkProgram(pr); gl.useProgram(pr);
+    const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(pr, "p"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    const U = n => gl.getUniformLocation(pr, n);
+
+    // pointer state: hover strength eases in/out; slip is a spring toward the pointer offset
+    let raf, alive = true, start = performance.now(), last = start;
+    let mouse = [-1, -1], inside = false, hover = 0;
+    let slip = [0, 0], vel = [0, 0], target = [0, 0];
+    const kick = () => { slip = [0, 0.85]; vel = [0, 0]; };   // touch / scroll-in: one slip, then snap back
+    if (mode === 3) setTimeout(kick, 600);
+
+    const img = new Image();
+    img.onload = () => {
+      if (!alive) return;
+      const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+      for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]])
+        gl.texParameteri(gl.TEXTURE_2D, k, v);
+      const frame = now => {
+        const dt = Math.min(0.05, (now - last) / 1000); last = now;
+        hover += ((inside ? 1 : 0) - hover) * (1 - Math.exp(-dt / 0.12));
+        const K = 260, D = 2 * Math.sqrt(K) * 0.55;                        // slightly underdamped: a detent click
+        for (let i = 0; i < 2; i++) { const a = K * ((inside ? target[i] : 0) - slip[i]) - D * vel[i]; vel[i] += a * dt; slip[i] += vel[i] * dt; }
+        const dpr = Math.min(devicePixelRatio || 1, 2);
+        const w = Math.round(cv.clientWidth * dpr), h = Math.round(cv.clientHeight * dpr);
+        if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+        gl.viewport(0, 0, w, h); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.uniform2f(U("u_res"), w, h); gl.uniform2f(U("u_tex"), META.width, META.height);
+        // minimum on-screen dot pitch: on a small card the pipeline's cell would fall under one screen
+        // pixel and the halftone turns to grey mush; droplets need a bigger pitch to read as droplets
+        const sTex = Math.min(w / META.width, h / META.height);
+        gl.uniform1f(U("u_cell"), Math.max(META.cell_px, (mode === 2 ? 8 : 4.5) / sTex)); gl.uniform1f(U("u_angle"), META.angle * Math.PI / 180);
+        gl.uniform1f(U("u_grey"), META.grey); gl.uniform1f(U("u_faceH"), META.face_h);
+        gl.uniform1f(U("u_time"), FIXED_T ?? (now - start) / 1000); gl.uniform1f(U("u_mode"), mode);
+        gl.uniform2f(U("u_mouse"), mouse[0], mouse[1]); gl.uniform1f(U("u_hover"), hover);
+        gl.uniform2f(U("u_slip"), ...(FIXED_SLIP ?? slip));
+        gl.uniform4f(U("u_eyes"), META.eyes[0][0], META.eyes[0][1], META.eyes[1][0], META.eyes[1][1]);
+        gl.uniform3f(U("u_ink"), 0, 0, 0); gl.uniform3f(U("u_paper"), 1, 1, 1);
+        gl.uniform3f(U("u_accent"), ...accentRef.current);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        raf = requestAnimationFrame(frame);
+      };
+      raf = requestAnimationFrame(frame);
+    };
+    img.src = DIR + "zones.png";
+    const move = e => {
+      const r = cv.getBoundingClientRect();
+      const s = Math.min(r.width / META.width, r.height / META.height);
+      const ox = (r.width - META.width * s) / 2, oy = (r.height - META.height * s) / 2;
+      mouse = [(e.clientX - r.left - ox) / s, (e.clientY - r.top - oy) / s];
+      target = [((e.clientX - r.left) / r.width - 0.5) * 2, ((e.clientY - r.top) / r.height - 0.5) * 2];
+      inside = true;
+    };
+    const leave = () => { inside = false; };
+    const tap = e => { if (e.pointerType !== "mouse" && mode === 3) kick(); };
+    cv.addEventListener("pointermove", move); cv.addEventListener("pointerleave", leave); cv.addEventListener("pointerdown", tap);
+    return () => { alive = false; cancelAnimationFrame(raf); cv.removeEventListener("pointermove", move); cv.removeEventListener("pointerleave", leave); cv.removeEventListener("pointerdown", tap); };
+  }, [mode]);
+}
+
+function Halftone({ mode, accent }) {
+  const ref = useRef(null);
+  useHalftone(ref, mode, accent);
+  return html`<canvas ref=${ref}></canvas>`;
+}
+
+// Dither Echo: offset silhouette filled with a slow 1-bit ordered-dither wave, behind the untouched portrait
+function DitherEcho({ bg }) {
+  const ref = useRef(null);
+  const [scale, setScale] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    const ro = new ResizeObserver(() => { const r = el.getBoundingClientRect(); setScale(Math.min(r.width / META.width, r.height / META.height)); });
+    ro.observe(el); return () => ro.disconnect();
+  }, []);
+  const off = Math.round(0.08 * META.face_h * scale);
+  const dark = luminance(hex2rgb(bg)) <= 0.35;
+  const front = dark ? rgb2hex(accentFor(bg)) : "#000000";
+  return html`<div ref=${ref} style=${{ position: "absolute", inset: 0 }}>
+    ${scale > 0 && html`<div class="echo" style=${{ position: "absolute", inset: 0, transform: `translate(${off}px, ${off}px)`, opacity: dark ? 0.9 : 1 }}>
+      <${Dithering} key=${front} colorBack="#00000000" colorFront=${front} shape="wave" type="4x4"
+        size=${Math.max(2, Math.round(META.cell_px * 1.4 * scale))} speed=${0.22} scale=${1.15}
+        style=${{ position: "absolute", inset: 0, width: "100%", height: "100%" }} />
+    </div>`}
+    <img src=${DIR + "portrait.png"} alt="" style=${{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" }} />
+  </div>`;
+}
+
+// one failing variant (e.g. no WebGL2) must not blank the whole page
+class Guard extends React.Component {
+  constructor(p) { super(p); this.state = { err: null }; }
+  static getDerivedStateFromError(err) { return { err }; }
+  render() {
+    return this.state.err
+      ? html`<p style=${{ padding: "16px", color: "#fff" }}>Needs WebGL2: ${String(this.state.err.message || this.state.err).slice(0, 120)}</p>`
+      : this.props.children;
+  }
+}
+
+function Card({ title, tag, note, children }) {
+  return html`<figure><div class="stage"><${Guard}>${children}<//></div>
+    <figcaption><b>${title}${tag && html`<span class=${"tag" + (tag === "cut?" ? " cut" : "")}>${tag}</span>`}</b><span>${note}</span></figcaption></figure>`;
+}
+
+function App() {
+  const [bg, setBg] = useState(getComputedStyle(document.documentElement).getPropertyValue("--bg").trim());
+  useEffect(() => {
+    const i = document.getElementById("bg");
+    const on = () => { document.documentElement.style.setProperty("--bg", i.value); setBg(i.value); };
+    i.addEventListener("input", on);
+    return () => i.removeEventListener("input", on);
+  }, []);
+  const accent = accentFor(bg);
+  const portrait = html`<img src=${DIR + "portrait.png"} alt="" />`;
+  return html`
+    <h2>New, after the critique round with Gemini 4 Neon</h2>
+    <main>
+      <${Card} title="5 · Ink Beads" tag="new" note="Grey dots act like wet ink droplets: a slow current makes neighbours bridge and pinch apart. Hover wakes them under the cursor. Ink, paper and eyes stay still.">
+        <${Halftone} mode=${2} accent=${accent} />
+      <//>
+      <${Card} title="6 · Riso Slip" tag="new" note="Hover: print plates slip out of register along the pointer (event-colour underprint peeks out, dots glide), then click back into register. Touch: one slip on load and on tap.">
+        <${Halftone} mode=${3} accent=${accent} />
+      <//>
+      <${Card} title="7 · Dither Echo" tag="new" note="An offset echo of the silhouette behind the untouched portrait, filled with a slow 1-bit ordered-dither wave (Paper Dithering).">
+        <${DitherEcho} bg=${bg} />
+      <//>
+      <${Card} title="8 · Xerox Sweep" tag="new" note="4.8 s loop: still portrait, then a copier exposure slit sweeps along the 45° screen, dots flash small, toner surges, a hairline in the event colour, a paper-feed tick.">
+        <${Halftone} mode=${4} accent=${accent} />
+      <//>
+    </main>
+    <h2>First four (Breathe and Print revised after the critique)</h2>
+    <main>
+      <${Card} title="1 · Breathe" tag="revised" note="One broad, slow tonal tide instead of rings; eyes held still. Hover opens the dots like a soft spotlight and eases out.">
+        <${Halftone} mode=${0} accent=${accent} />
+      <//>
+      <${Card} title="2 · Print" tag="revised" note="4.5 s loop with no empty frames: finished portrait, a diagonal wipe-out, dots re-print first, then the ink plate stamps in.">
+        <${Halftone} mode=${1} accent=${accent} />
+      <//>
+      <${Card} title="3 · Liquid ink" tag="cut?" note="Gemini: chrome fights the dry print look. Kept for comparison.">
+        ${portrait}
+        <${LiquidMetal} image=${DIR + "ink.png"} colorBack="#00000000" colorTint="#ffffff"
+          repetition=${3} softness=${0.15} shiftRed=${0.25} shiftBlue=${0.25} distortion=${0.1}
+          contour=${0.3} angle=${70} speed=${0.6} fit="contain" scale=${1}
+          style=${{ position: "absolute", inset: 0, mixBlendMode: "screen", filter: "brightness(0.38) contrast(2.6)" }} />
+      <//>
+      <${Card} title="4 · Aura" tag="cut?" note="Gemini: a soft glow breaks the hard-edged house style. Kept for comparison.">
+        <${Heatmap} key=${bg} image=${DIR + "silhouette.png"} colors=${auraColors(bg)}
+          colorBack="#00000000" contour=${0.5} angle=${0} noise=${0.05} innerGlow=${0.4} outerGlow=${0.45}
+          speed=${0.8} fit="contain" scale=${1.0} style=${{ position: "absolute", inset: 0 }} />
+        ${portrait}
+      <//>
+    </main>`;
+}
+
+createRoot(document.getElementById("root")).render(html`<${App} />`);
+</script>
+</body>
+</html>

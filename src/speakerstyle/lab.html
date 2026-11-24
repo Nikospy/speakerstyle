@@ -1,0 +1,2117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Speaker Style Lab</title>
+  <style>
+    :root {
+      --s1: 4px;
+      --s2: 8px;
+      --s3: 16px;
+      --s4: 24px;
+      --s5: 32px;
+      --s6: 48px;
+
+      --f12: 12px;
+      --f14: 14px;
+      --f16: 16px;
+      --f20: 20px;
+
+      --bg: #141414;
+      --panel: #1c1c1c;
+      --line: #2a2a2a;
+      --text: #ececec;
+      --muted: #9a9a9a;
+      --accent: #d4ec6a;
+      --on-accent: #141414;
+      --event: #6b2a9a;
+      --r: 8px;
+
+      --ok: #7bd88f;
+      --warn: #e8c26b;
+      --err: #f28b82;
+      --scrim: rgb(0 0 0 / 0.76);
+      --panel-hover: color-mix(in oklch, var(--panel) 88%, var(--text));
+      --panel-active: color-mix(in oklch, var(--panel) 80%, var(--text));
+      --accent-hover: color-mix(in oklch, var(--accent) 90%, white);
+      --accent-active: color-mix(in oklch, var(--accent) 85%, black);
+      --dur: 150ms;
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+
+    html,
+    body {
+      block-size: 100%;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: var(--f14)/1.43 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      block-size: 100dvh;
+      overflow: clip;
+    }
+
+    h1 {
+      font-size: var(--f16);
+      font-weight: 600;
+      margin: 0;
+      margin-inline-end: auto;
+    }
+
+    h2 {
+      font-size: var(--f20);
+      font-weight: 600;
+      margin: 0;
+      line-height: 1.25;
+    }
+
+    p {
+      margin: 0;
+    }
+
+    button {
+      font: inherit;
+      color: var(--text);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      padding-block: var(--s2);
+      padding-inline: var(--s3);
+      min-block-size: 36px;
+      cursor: pointer;
+      text-align: start;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--s2);
+      white-space: nowrap;
+    }
+
+    button.primary {
+      background: var(--accent);
+      color: var(--on-accent);
+      border-color: var(--accent);
+      font-weight: 600;
+    }
+
+    button.full-width {
+      inline-size: 100%;
+    }
+
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    :focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    @media (hover: hover) and (pointer: fine) {
+      button:not(:disabled):hover {
+        background: var(--panel-hover);
+      }
+
+      button.primary:not(:disabled):hover {
+        background: var(--accent-hover);
+        border-color: var(--accent-hover);
+      }
+
+      .version-tile:not(:disabled):hover {
+        outline: 2px solid color-mix(in oklch, var(--text) 45%, transparent);
+        outline-offset: -2px;
+      }
+
+      .version-tile.sel:not(:disabled):hover {
+        outline: 3px solid var(--accent);
+        outline-offset: -3px;
+      }
+
+      .link-btn:not(:disabled):hover {
+        color: var(--text);
+        background: transparent;
+      }
+    }
+
+    button:not(:disabled):active {
+      background: var(--panel-active);
+    }
+
+    button.primary:not(:disabled):active {
+      background: var(--accent-active);
+      border-color: var(--accent-active);
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      button,
+      .version-tile,
+      .drop-zone,
+      .stage img {
+        transition-property: background-color, border-color, color, opacity;
+        transition-duration: var(--dur);
+        transition-timing-function: ease-out;
+      }
+    }
+
+    /* Header */
+    header {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: var(--s3);
+      padding-block: var(--s3);
+      padding-inline: var(--s4);
+      border-block-end: 1px solid var(--line);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: var(--s2);
+    }
+
+    /* Main workspace */
+    main {
+      display: grid;
+      grid-template-columns: 1fr 1fr 300px;
+      gap: var(--s4);
+      padding: var(--s4);
+      min-block-size: 0;
+      min-inline-size: 0;
+    }
+
+    main.is-single {
+      grid-template-columns: 1fr;
+    }
+
+    /* Left column: preview */
+    .big {
+      display: flex;
+      flex-direction: column;
+      gap: var(--s2);
+      min-block-size: 0;
+      min-inline-size: 0;
+    }
+
+    .preview-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--s3);
+    }
+
+    .stage {
+      flex: 1;
+      background: var(--event);
+      border-radius: var(--r);
+      display: grid;
+      place-items: center;
+      overflow: clip;
+      position: relative;
+      min-block-size: 0;
+      min-inline-size: 0;
+    }
+
+    .stage.is-surface {
+      background: var(--panel);
+      border: 1px dashed var(--line);
+      place-items: stretch;
+    }
+
+    .stage.is-dragover {
+      border-color: var(--accent);
+      background: color-mix(in oklch, var(--panel) 92%, var(--accent));
+    }
+
+    .stage img {
+      max-inline-size: 100%;
+      max-block-size: 100%;
+      object-fit: contain;
+      display: block;
+    }
+
+    /* State overlays inside .stage */
+    .stage-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: center;
+      gap: var(--s3);
+      padding: var(--s6);
+      max-inline-size: 520px;
+      text-align: start;
+    }
+
+    .stage-panel p {
+      color: var(--muted);
+    }
+
+    .stage-panel .err-text {
+      color: var(--err);
+    }
+
+    .stage-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--s2);
+      margin-block-start: var(--s2);
+    }
+
+    .loading-thumb {
+      inline-size: 96px;
+      block-size: 96px;
+      object-fit: cover;
+      border-radius: var(--r);
+      border: 1px solid var(--line);
+      background: var(--bg);
+    }
+
+    /* Preview footer meta (status, warnings, tune) */
+    .preview-meta {
+      display: flex;
+      flex-direction: column;
+      gap: var(--s2);
+      align-items: flex-start;
+    }
+
+    .status-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--s3);
+      inline-size: 100%;
+      flex-wrap: wrap;
+    }
+
+    .status {
+      display: flex;
+      gap: var(--s2);
+      align-items: center;
+      color: var(--muted);
+      font-size: var(--f14);
+    }
+
+    .updating-note {
+      color: var(--muted);
+      font-size: var(--f12);
+    }
+
+    .notice-warn {
+      color: var(--warn);
+      font-size: var(--f12);
+    }
+
+    .notice-err {
+      color: var(--err);
+      font-size: var(--f12);
+    }
+
+    .notice-ok {
+      color: var(--ok);
+      font-size: var(--f12);
+      word-break: break-word;
+    }
+
+    .tune-box {
+      display: flex;
+      flex-direction: column;
+      gap: var(--s1);
+      inline-size: 100%;
+    }
+
+    .tune-status {
+      color: var(--text);
+      font-size: var(--f12);
+    }
+
+    .tune-note {
+      color: var(--muted);
+      font-size: var(--f12);
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 3;
+      line-clamp: 3;
+      overflow: hidden;
+      cursor: pointer;
+    }
+    .tune-note.open {
+      -webkit-line-clamp: unset;
+      line-clamp: none;
+    }
+
+    /* Middle column: 3x2 versions */
+    .versions-col {
+      display: flex;
+      flex-direction: column;
+      min-block-size: 0;
+      min-inline-size: 0;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: var(--s2);
+      margin-block-end: var(--s2);
+    }
+
+    .lbl {
+      font-size: var(--f12);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin: 0 0 var(--s2);
+    }
+
+    .section-head .lbl {
+      margin: 0;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-rows: repeat(2, minmax(0, 1fr));
+      gap: var(--s2);
+      min-block-size: 0;
+      flex: 1;
+    }
+
+    .version-tile {
+      position: relative;
+      display: grid;
+      place-items: center;
+      padding: 0;
+      border: 0;
+      min-block-size: 0;
+      inline-size: 100%;
+      block-size: 100%;
+      background: var(--event);
+      border-radius: var(--r);
+      overflow: clip;
+      cursor: pointer;
+    }
+
+    .version-tile.sel {
+      outline: 3px solid var(--accent);
+      outline-offset: -3px;
+    }
+
+    .version-tile img {
+      max-inline-size: 100%;
+      max-block-size: 100%;
+      object-fit: contain;
+      display: block;
+    }
+
+    .version-tile .tile-label {
+      position: absolute;
+      inset-inline-start: var(--s2);
+      inset-block-end: var(--s2);
+      max-inline-size: calc(100% - var(--s3));
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-style: normal;
+      font-size: var(--f12);
+      color: var(--text);
+      background: var(--scrim);
+      padding-block: var(--s1);
+      padding-inline: var(--s2);
+      border-radius: var(--r);
+    }
+
+    /* Right column: controls */
+    aside {
+      background: var(--panel);
+      border-radius: var(--r);
+      padding: var(--s4);
+      overflow-y: auto;
+      min-block-size: 0;
+      display: flex;
+      flex-direction: column;
+      gap: var(--s5);
+    }
+
+    .group {
+      display: flex;
+      flex-direction: column;
+      gap: var(--s2);
+    }
+
+    .group .lbl {
+      margin: 0;
+    }
+
+    .knob-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--s3);
+    }
+
+    .knob {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: var(--s1) var(--s2);
+      align-items: center;
+    }
+
+    .knob label {
+      color: var(--text);
+      font-size: var(--f14);
+    }
+
+    .knob output {
+      color: var(--muted);
+      font-size: var(--f14);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .knob input[type="range"] {
+      grid-column: 1 / -1;
+      inline-size: 100%;
+      min-block-size: 24px;
+      accent-color: var(--accent);
+      margin: 0;
+      cursor: pointer;
+    }
+
+    .link-btn {
+      background: transparent;
+      border: 0;
+      padding-block: var(--s1);
+      padding-inline: 0;
+      min-block-size: 28px;
+      color: var(--muted);
+      justify-content: flex-start;
+      align-self: flex-start;
+    }
+
+    /* Segmented controls (Subject, Lab/Affinity toggle) */
+    .segmented {
+      display: inline-flex;
+      gap: var(--s1);
+      flex-wrap: wrap;
+    }
+
+    .segmented.full {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--s2);
+      inline-size: 100%;
+    }
+
+    .seg-btn {
+      min-block-size: 32px;
+      padding-block: var(--s1);
+      padding-inline: var(--s2);
+      font-size: var(--f12);
+      background: var(--bg);
+      border: 1px solid var(--line);
+      color: var(--muted);
+    }
+
+    .seg-btn[aria-pressed="true"] {
+      color: var(--text);
+      border-color: var(--accent);
+      background: var(--panel);
+      font-weight: 600;
+    }
+
+    .detected-note {
+      font-size: var(--f12);
+      color: var(--muted);
+    }
+
+    /* Colours */
+    .swatches-col {
+      display: flex;
+      flex-direction: column;
+      gap: var(--s2);
+    }
+
+    .swatches {
+      display: flex;
+      gap: var(--s3);
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .swatch-field {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--s2);
+      cursor: pointer;
+      min-block-size: 28px;
+    }
+
+    .swatch-field input[type="color"] {
+      appearance: none;
+      -webkit-appearance: none;
+      inline-size: 28px;
+      block-size: 28px;
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      background: transparent;
+      cursor: pointer;
+      overflow: clip;
+      flex-shrink: 0;
+    }
+
+    .swatch-field input[type="color"]::-webkit-color-swatch-wrapper {
+      padding: 0;
+    }
+
+    .swatch-field input[type="color"]::-webkit-color-swatch {
+      border: 0;
+      border-radius: var(--r);
+    }
+
+    .swatch-field input[type="color"]::-moz-color-swatch {
+      border: 0;
+      border-radius: var(--r);
+    }
+
+    /* Affinity */
+    .dot {
+      inline-size: 8px;
+      block-size: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+    }
+
+    .dot.connected {
+      background: var(--ok);
+    }
+
+    .effects-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--s2);
+    }
+
+    .effect-item {
+      display: flex;
+      flex-direction: column;
+      gap: var(--s2);
+    }
+
+    .check-row {
+      display: flex;
+      align-items: center;
+      gap: var(--s2);
+      min-block-size: 28px;
+      cursor: pointer;
+      color: var(--text);
+    }
+
+    .check-row input[type="checkbox"] {
+      inline-size: 16px;
+      block-size: 16px;
+      accent-color: var(--accent);
+      margin: 0;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .effect-params {
+      display: flex;
+      flex-direction: column;
+      gap: var(--s2);
+      padding-inline-start: var(--s4);
+    }
+
+    .sub-lbl {
+      font-size: var(--f12);
+      color: var(--muted);
+      margin-block-start: var(--s2);
+    }
+
+    .btn-stack {
+      display: flex;
+      flex-direction: column;
+      gap: var(--s2);
+    }
+
+    .affinity-connected {
+      display: flex;
+      flex-direction: column;
+      gap: var(--s3);
+    }
+
+    .affinity-exports {
+      display: flex;
+      flex-direction: column;
+      gap: var(--s2);
+    }
+
+    .affinity-export-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--s2);
+    }
+
+    .affinity-export-row button {
+      flex: 1 1 auto;
+      padding-inline: var(--s2);
+      font-size: var(--f12);
+    }
+
+    @media (max-width: 980px) {
+      body {
+        block-size: auto;
+        min-block-size: 100dvh;
+        overflow: auto;
+      }
+
+      main {
+        grid-template-columns: 1fr;
+      }
+
+      .big .stage {
+        min-block-size: 360px;
+      }
+
+      .grid {
+        min-block-size: 320px;
+      }
+
+      aside {
+        overflow: visible;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Speaker Style Lab</h1>
+    <div class="header-actions" id="header-actions" hidden>
+      <button type="button" id="btn-choose-another">Choose another photo</button>
+      <button type="button" id="btn-new-versions">Show 6 new versions</button>
+      <button type="button" id="btn-tune">Tune for me</button>
+      <button type="button" id="btn-export-png" class="primary">Export PNG</button>
+    </div>
+  </header>
+
+  <input type="file" id="file-input" accept="image/*" hidden>
+
+  <main id="workspace" class="is-single">
+    <!-- Left: Big preview / Empty / Loading / Error -->
+    <section class="big" aria-label="Preview">
+      <div class="preview-bar" id="preview-bar" hidden>
+        <div class="segmented" role="group" aria-label="Preview source" id="preview-toggle">
+          <button type="button" class="seg-btn" id="btn-mode-lab" aria-pressed="true">Lab</button>
+          <button type="button" class="seg-btn" id="btn-mode-affinity" aria-pressed="false">Affinity</button>
+        </div>
+      </div>
+
+      <div class="stage is-surface" id="big-stage">
+        <!-- Empty state -->
+        <div class="stage-panel" id="state-empty">
+          <h2>Drop a photo here</h2>
+          <p>JPG, PNG or WebP. The background is cut out and styled on your event colour.</p>
+          <div class="stage-actions">
+            <button type="button" class="primary" id="btn-choose-empty">Choose photo</button>
+          </div>
+        </div>
+
+        <!-- Loading state -->
+        <div class="stage-panel" id="state-loading" hidden>
+          <img class="loading-thumb" id="loading-thumb" alt="" hidden>
+          <h2>Cutting out the background…</h2>
+          <p>This takes about 10 seconds. The very first photo of each kind takes a few minutes, because the cut-out model downloads once.</p>
+        </div>
+
+        <!-- Error state -->
+        <div class="stage-panel" id="state-error" hidden role="alert">
+          <h2>Could not prepare this photo</h2>
+          <p class="err-text" id="error-message"></p>
+          <div class="stage-actions">
+            <button type="button" class="primary" id="btn-choose-error">Choose another photo</button>
+            <button type="button" id="btn-retry-auto" hidden>Try as Auto</button>
+            <button type="button" id="btn-retry-object" hidden>Try as Object</button>
+          </div>
+        </div>
+
+        <!-- Full / partial image -->
+        <img id="preview-img" alt="Styled speaker preview" hidden>
+      </div>
+
+      <div class="preview-meta" id="preview-meta" hidden>
+        <div class="status-row">
+          <span class="status" id="selection-status">Selected version: Current</span>
+          <span class="updating-note" id="preview-updating" aria-live="polite" hidden>Updating…</span>
+        </div>
+        <p class="notice-err" id="preview-error" role="alert" hidden></p>
+        <p class="notice-warn" id="warnings-line" role="status" hidden></p>
+        <div class="tune-box" id="tune-box" aria-live="polite" hidden>
+          <p class="tune-status" id="tune-status"></p>
+          <p class="tune-note" id="tune-note" title="Show the whole note" onclick="this.classList.toggle('open')" hidden></p>
+          <p class="notice-err" id="tune-error" role="alert" hidden></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Middle: 6 versions -->
+    <section class="versions-col" id="versions-panel" aria-label="Versions" hidden>
+      <div class="section-head">
+        <p class="lbl">Pick a version by eye</p>
+        <span class="updating-note" id="versions-updating" aria-live="polite" hidden>Updating…</span>
+      </div>
+      <div class="grid" id="versions-grid" role="group" aria-label="Style versions"></div>
+      <p class="notice-err" id="versions-error" role="alert" hidden></p>
+    </section>
+
+    <!-- Right: Fine-tune, Subject, Colours, Affinity, Export -->
+    <aside id="controls-panel" aria-label="Controls" hidden>
+      <section class="group" aria-labelledby="lbl-finetune">
+        <p class="lbl" id="lbl-finetune">Fine-tune</p>
+        <div class="knob-list" id="knobs-main"></div>
+        <button type="button" class="link-btn" id="btn-more-settings" aria-expanded="false" aria-controls="knobs-extra" hidden>
+          More settings ▾
+        </button>
+        <div class="knob-list" id="knobs-extra" hidden></div>
+      </section>
+
+      <section class="group" aria-labelledby="lbl-subject">
+        <p class="lbl" id="lbl-subject">Subject</p>
+        <div class="segmented full" role="group" aria-label="Subject type">
+          <button type="button" class="seg-btn" data-subject="auto" aria-pressed="true">Auto</button>
+          <button type="button" class="seg-btn" data-subject="face" aria-pressed="false">Portrait</button>
+          <button type="button" class="seg-btn" data-subject="object" aria-pressed="false">Object</button>
+        </div>
+        <p class="detected-note" id="subject-detected" hidden></p>
+      </section>
+
+      <section class="group" aria-labelledby="lbl-colours">
+        <p class="lbl" id="lbl-colours">Colours</p>
+        <div class="swatches-col">
+          <div class="swatches">
+            <label class="swatch-field">
+              <input type="color" id="colour-bg" value="#6b2a9a">
+              <span>Event background</span>
+            </label>
+          </div>
+          <div class="swatches">
+            <label class="swatch-field">
+              <input type="color" id="colour-ink" value="#000000">
+              <span>Ink</span>
+            </label>
+            <label class="swatch-field">
+              <input type="color" id="colour-paper" value="#ffffff">
+              <span>Paper</span>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section class="group" aria-labelledby="lbl-affinity">
+        <p class="lbl" id="lbl-affinity">Affinity</p>
+        <p class="status" id="affinity-status-row">
+          <span class="dot" id="affinity-dot" aria-hidden="true"></span>
+          <span id="affinity-message">Checking Affinity connection…</span>
+        </p>
+
+        <div id="affinity-connected-ui" class="affinity-connected" hidden>
+          <div class="effects-list" id="affinity-effects" hidden></div>
+          <div class="btn-stack">
+            <button type="button" class="full-width" id="btn-affinity-open">Open in Affinity with layers</button>
+            <span class="updating-note" id="affinity-updating" aria-live="polite" hidden></span>
+            <p class="notice-err" id="affinity-error" role="alert" hidden></p>
+          </div>
+
+          <div class="affinity-exports" id="affinity-exports" hidden>
+            <p class="sub-lbl">Export from Affinity</p>
+            <div class="affinity-export-row">
+              <button type="button" data-aff-export="png">Export PNG</button>
+              <button type="button" data-aff-export="psd">Export PSD</button>
+              <button type="button" data-aff-export="af">Export Affinity file</button>
+            </div>
+            <p class="notice-ok" id="affinity-export-path" role="status" hidden></p>
+            <p class="notice-err" id="affinity-export-error" role="alert" hidden></p>
+          </div>
+        </div>
+      </section>
+
+      <section class="group" aria-labelledby="lbl-export">
+        <p class="lbl" id="lbl-export">Export</p>
+        <div class="btn-stack">
+          <button type="button" class="full-width" id="btn-export-jpg">Export JPG on background</button>
+          <button type="button" class="full-width" id="btn-export-json">Save settings</button>
+          <p class="notice-err" id="export-error" role="alert" hidden></p>
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <script type="module">
+    const state = {
+      screen: "empty", // empty | loading | error | ready
+      file: null,
+      loadingThumbUrl: null,
+      subject: "auto", // auto | face | object
+      photo: null, // { id, name, kind, warnings, size }
+      knobs: [],
+      params: {},
+      versions: [], // [{ label, params }]
+      selectedVersionIndex: 0,
+      selectedLabel: "Current",
+      moreOpen: false,
+
+      bg: "#6b2a9a",
+      ink: "#000000",
+      paper: "#ffffff",
+
+      previewMode: "lab", // lab | affinity
+      labPreviewUrl: null,
+      affinityPreviewUrl: null,
+      thumbUrls: [],
+
+      tuneJobId: null,
+      tuneTimer: null,
+      tuneRunning: false,
+
+      affinity: {
+        connected: false,
+        message: "Checking Affinity connection…",
+        effectsSpec: {},
+        effectsState: {}, // { effect_id: { on: bool, param_id: value } }
+        open: false,
+        pollTimer: null,
+        effectsDebounce: null,
+        seq: 0,
+      },
+
+      importSeq: 0,
+      importAbort: null,
+      renderSeq: 0,
+      renderDebounce: null,
+      versionsSeq: 0,
+      colourThumbDebounce: null,
+      lastErrorFromSubject: false,
+    };
+
+    const $ = (id) => document.getElementById(id);
+
+    const els = {
+      headerActions: $("header-actions"),
+      btnChooseAnother: $("btn-choose-another"),
+      btnNewVersions: $("btn-new-versions"),
+      btnTune: $("btn-tune"),
+      btnExportPng: $("btn-export-png"),
+      fileInput: $("file-input"),
+
+      workspace: $("workspace"),
+      previewBar: $("preview-bar"),
+      btnModeLab: $("btn-mode-lab"),
+      btnModeAffinity: $("btn-mode-affinity"),
+      previewUpdating: $("preview-updating"),
+
+      bigStage: $("big-stage"),
+      stateEmpty: $("state-empty"),
+      stateLoading: $("state-loading"),
+      stateError: $("state-error"),
+      btnChooseEmpty: $("btn-choose-empty"),
+      btnChooseError: $("btn-choose-error"),
+      btnRetryAuto: $("btn-retry-auto"),
+      btnRetryObject: $("btn-retry-object"),
+      loadingThumb: $("loading-thumb"),
+      errorMessage: $("error-message"),
+      previewImg: $("preview-img"),
+
+      previewMeta: $("preview-meta"),
+      selectionStatus: $("selection-status"),
+      previewError: $("preview-error"),
+      warningsLine: $("warnings-line"),
+      tuneBox: $("tune-box"),
+      tuneStatus: $("tune-status"),
+      tuneNote: $("tune-note"),
+      tuneError: $("tune-error"),
+
+      versionsPanel: $("versions-panel"),
+      versionsUpdating: $("versions-updating"),
+      versionsGrid: $("versions-grid"),
+      versionsError: $("versions-error"),
+
+      controlsPanel: $("controls-panel"),
+      knobsMain: $("knobs-main"),
+      knobsExtra: $("knobs-extra"),
+      btnMoreSettings: $("btn-more-settings"),
+      subjectDetected: $("subject-detected"),
+
+      colourBg: $("colour-bg"),
+      colourInk: $("colour-ink"),
+      colourPaper: $("colour-paper"),
+
+      affinityDot: $("affinity-dot"),
+      affinityMessage: $("affinity-message"),
+      affinityConnectedUi: $("affinity-connected-ui"),
+      affinityEffects: $("affinity-effects"),
+      btnAffinityOpen: $("btn-affinity-open"),
+      affinityUpdating: $("affinity-updating"),
+      affinityError: $("affinity-error"),
+      affinityExports: $("affinity-exports"),
+      affinityExportPath: $("affinity-export-path"),
+      affinityExportError: $("affinity-export-error"),
+
+      btnExportJpg: $("btn-export-jpg"),
+      btnExportJson: $("btn-export-json"),
+      exportError: $("export-error"),
+    };
+
+    const subjectButtons = Array.from(document.querySelectorAll("[data-subject]"));
+    const affinityExportButtons = Array.from(document.querySelectorAll("[data-aff-export]"));
+    const sliderControls = new Map(); // knob.id -> { input, output, knob }
+
+    // ------------------------------------------------------------------ Helpers
+    function sanitizeHeaderFilename(name) {
+      const ascii = String(name || "photo.jpg")
+        .normalize("NFKD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^\x20-\x7E]/g, "-")
+        .replace(/["\\]/g, "-")
+        .trim();
+      return ascii || "photo.jpg";
+    }
+
+    function formatKnobValue(knob, value) {
+      const num = Number(value);
+      if (knob.id === "dot_angle" || /angle/i.test(knob.label)) {
+        return `${Math.round(num)}°`;
+      }
+      if (knob.step < 0.01) {
+        return num.toFixed(4);
+      }
+      return num.toFixed(2);
+    }
+
+    function formatEffectParam(spec, value) {
+      const num = Number(value);
+      const step = Number(spec.step || 1);
+      if (step >= 1) return String(Math.round(num));
+      if (step >= 0.1) return num.toFixed(1);
+      if (step >= 0.01) return num.toFixed(2);
+      return num.toFixed(4);
+    }
+
+    function subjectLabel(kind) {
+      if (kind === "face") return "Portrait";
+      if (kind === "object") return "Object";
+      return "Auto";
+    }
+
+    async function readErrorMessage(res, fallback) {
+      try {
+        const ct = res.headers.get("Content-Type") || "";
+        if (ct.includes("application/json")) {
+          const data = await res.json();
+          if (data && data.error) return data.error;
+        } else {
+          const txt = (await res.text()).trim();
+          if (txt) return txt;
+        }
+      } catch {
+        // ignore parse errors
+      }
+      return fallback;
+    }
+
+    async function apiJson(url, payload, options = {}) {
+      let res;
+      try {
+        res = await fetch(url, {
+          method: payload === undefined ? "GET" : "POST",
+          headers: payload === undefined ? undefined : { "Content-Type": "application/json" },
+          body: payload === undefined ? undefined : JSON.stringify(payload),
+          signal: options.signal,
+        });
+      } catch (err) {
+        if (err && err.name === "AbortError") throw err;
+        throw new Error("Could not reach the lab server. Check that Speaker Style Lab is running, then try again.");
+      }
+      if (!res.ok) {
+        throw new Error(await readErrorMessage(res, "The lab could not complete this request. Try again."));
+      }
+      return res.json();
+    }
+
+    function revokeUrl(url) {
+      if (url && url.startsWith("blob:")) {
+        URL.revokeObjectURL(url);
+      }
+    }
+
+    function setError(el, msg) {
+      if (msg) {
+        el.textContent = msg;
+        el.hidden = false;
+      } else {
+        el.textContent = "";
+        el.hidden = true;
+      }
+    }
+
+    // ------------------------------------------------------------------ Screen state
+    function updateScreen() {
+      const isReady = state.screen === "ready";
+      els.workspace.classList.toggle("is-single", !isReady);
+      els.headerActions.hidden = !isReady;
+      els.versionsPanel.hidden = !isReady;
+      els.controlsPanel.hidden = !isReady;
+      els.previewMeta.hidden = !isReady;
+
+      els.bigStage.classList.toggle("is-surface", !isReady);
+      els.stateEmpty.hidden = state.screen !== "empty";
+      els.stateLoading.hidden = state.screen !== "loading";
+      els.stateError.hidden = state.screen !== "error";
+      els.previewImg.hidden = !isReady || !getActivePreviewSrc();
+
+      if (state.screen === "error") {
+        const canRetrySubject = Boolean(state.file && state.lastErrorFromSubject);
+        els.btnRetryAuto.hidden = !canRetrySubject || state.subject === "auto";
+        els.btnRetryObject.hidden = !canRetrySubject || state.subject === "object";
+      }
+
+      updatePreviewToggle();
+      updateSubjectButtons();
+    }
+
+    function getActivePreviewSrc() {
+      if (state.previewMode === "affinity" && state.affinityPreviewUrl) {
+        return state.affinityPreviewUrl;
+      }
+      return state.labPreviewUrl || "";
+    }
+
+    function refreshPreviewImage() {
+      const src = getActivePreviewSrc();
+      if (state.screen === "ready" && src) {
+        if (els.previewImg.getAttribute("src") !== src) {
+          els.previewImg.src = src;
+        }
+        els.previewImg.hidden = false;
+      } else {
+        els.previewImg.hidden = true;
+      }
+    }
+
+    function updatePreviewToggle() {
+      const showToggle = state.screen === "ready" && state.affinity.open;
+      els.previewBar.hidden = !showToggle;
+      els.btnModeLab.setAttribute("aria-pressed", String(state.previewMode === "lab"));
+      els.btnModeAffinity.setAttribute("aria-pressed", String(state.previewMode === "affinity"));
+      els.btnModeAffinity.disabled = !state.affinityPreviewUrl;
+    }
+
+    function updateSubjectButtons() {
+      for (const btn of subjectButtons) {
+        btn.setAttribute("aria-pressed", String(btn.dataset.subject === state.subject));
+      }
+      if (state.photo && state.subject === "auto") {
+        els.subjectDetected.textContent = `Detected: ${subjectLabel(state.photo.kind)}`;
+        els.subjectDetected.hidden = false;
+      } else {
+        els.subjectDetected.hidden = true;
+      }
+    }
+
+    function updateSelectionStatus(text) {
+      els.selectionStatus.textContent = text;
+    }
+
+    // ------------------------------------------------------------------ Import photo
+    function resetForNewImport() {
+      stopTunePolling();
+      clearTimeout(state.renderDebounce);
+      clearTimeout(state.colourThumbDebounce);
+      clearTimeout(state.affinity.effectsDebounce);
+
+      state.renderSeq += 1;
+      state.versionsSeq += 1;
+      state.affinity.seq += 1;
+      state.affinity.open = false;
+      state.affinityPreviewUrl = null;
+      state.previewMode = "lab";
+
+      setError(els.previewError, "");
+      setError(els.versionsError, "");
+      setError(els.exportError, "");
+      setError(els.affinityError, "");
+      setError(els.affinityExportError, "");
+      els.affinityExportPath.hidden = true;
+      els.affinityExports.hidden = true;
+      els.affinityUpdating.hidden = true;
+      els.versionsGrid.textContent = "";
+      clearVersionThumbUrls();
+      els.tuneBox.hidden = true;
+      els.warningsLine.hidden = true;
+      els.previewUpdating.hidden = true;
+      els.versionsUpdating.hidden = true;
+    }
+
+    async function importPhoto(file, subject = state.subject, fromSubjectChange = false) {
+      if (!file) return;
+
+      if (state.importAbort) {
+        state.importAbort.abort();
+      }
+      const abort = new AbortController();
+      state.importAbort = abort;
+      const seq = ++state.importSeq;
+
+      state.file = file;
+      state.subject = subject;
+      state.lastErrorFromSubject = fromSubjectChange;
+
+      resetForNewImport();
+
+      revokeUrl(state.loadingThumbUrl);
+      state.loadingThumbUrl = URL.createObjectURL(file);
+      els.loadingThumb.src = state.loadingThumbUrl;
+      els.loadingThumb.hidden = false;
+
+      state.screen = "loading";
+      updateScreen();
+
+      try {
+        const res = await fetch("/api/photo", {
+          method: "POST",
+          headers: {
+            "X-Filename": sanitizeHeaderFilename(file.name),
+            "X-Subject": subject,
+          },
+          body: file,
+          signal: abort.signal,
+        });
+
+        if (seq !== state.importSeq) return;
+
+        if (!res.ok) {
+          const msg = await readErrorMessage(
+            res,
+            "Could not read this photo. Choose a JPG, PNG or WebP image and try again."
+          );
+          state.photo = null;
+          state.screen = "error";
+          els.errorMessage.textContent = msg;
+          updateScreen();
+          return;
+        }
+
+        const data = await res.json();
+        if (seq !== state.importSeq) return;
+
+        state.photo = {
+          id: data.id,
+          name: data.name,
+          kind: data.kind,
+          warnings: Array.isArray(data.warnings) ? data.warnings : [],
+          size: data.size || [0, 0],
+        };
+        state.knobs = Array.isArray(data.knobs) ? data.knobs : [];
+        state.params = { ...(data.params || {}) };
+        state.selectedVersionIndex = 0;
+        state.selectedLabel = "Current";
+
+        revokeUrl(state.labPreviewUrl);
+        state.labPreviewUrl = null;
+        clearVersionThumbUrls();
+
+        buildKnobs();
+        renderWarnings();
+        updateSelectionStatus("Selected version: Current");
+
+        state.screen = "ready";
+        updateScreen();
+
+        requestBigRender({ immediate: true });
+        loadVersions();
+      } catch (err) {
+        if (err && err.name === "AbortError") return;
+        if (seq !== state.importSeq) return;
+        state.photo = null;
+        state.screen = "error";
+        els.errorMessage.textContent =
+          "Could not reach the lab server. Check that Speaker Style Lab is running, then try again.";
+        updateScreen();
+      }
+    }
+
+    function renderWarnings() {
+      const warnings = state.photo ? state.photo.warnings : [];
+      if (warnings.length > 0) {
+        els.warningsLine.textContent = warnings.join(" ");
+        els.warningsLine.hidden = false;
+      } else {
+        els.warningsLine.textContent = "";
+        els.warningsLine.hidden = true;
+      }
+    }
+
+    // ------------------------------------------------------------------ Knobs
+    function buildKnobs() {
+      els.knobsMain.textContent = "";
+      els.knobsExtra.textContent = "";
+      sliderControls.clear();
+
+      let extraCount = 0;
+      for (const knob of state.knobs) {
+        const wrap = document.createElement("div");
+        wrap.className = "knob";
+
+        const inputId = `knob-${knob.id}`;
+        const label = document.createElement("label");
+        label.htmlFor = inputId;
+        label.textContent = knob.label;
+
+        const output = document.createElement("output");
+        output.htmlFor = inputId;
+
+        const input = document.createElement("input");
+        input.type = "range";
+        input.id = inputId;
+        input.min = String(knob.min);
+        input.max = String(knob.max);
+        input.step = String(knob.step);
+
+        const initial = state.params[knob.id] ?? knob.min;
+        input.value = String(initial);
+        output.textContent = formatKnobValue(knob, initial);
+
+        input.addEventListener("input", () => {
+          const val = Number(input.value);
+          state.params[knob.id] = val;
+          output.textContent = formatKnobValue(knob, val);
+          state.selectedVersionIndex = -1;
+          state.selectedLabel = "Custom settings";
+          updateSelectionStatus("Custom settings");
+          updateVersionSelectionClasses();
+          if (state.previewMode === "affinity") {
+            state.previewMode = "lab";
+            updatePreviewToggle();
+            refreshPreviewImage();
+          }
+          requestBigRender({ immediate: false });
+        });
+
+        wrap.append(label, output, input);
+        if (knob.main) {
+          els.knobsMain.appendChild(wrap);
+        } else {
+          els.knobsExtra.appendChild(wrap);
+          extraCount += 1;
+        }
+        sliderControls.set(knob.id, { input, output, knob });
+      }
+
+      els.btnMoreSettings.hidden = extraCount === 0;
+      els.knobsExtra.hidden = !state.moreOpen || extraCount === 0;
+      els.btnMoreSettings.setAttribute("aria-expanded", String(state.moreOpen && extraCount > 0));
+      els.btnMoreSettings.textContent = state.moreOpen ? "Less settings ▴" : "More settings ▾";
+    }
+
+    function syncSlidersFromParams() {
+      for (const [id, ctrl] of sliderControls.entries()) {
+        if (Object.prototype.hasOwnProperty.call(state.params, id)) {
+          const val = Number(state.params[id]);
+          ctrl.input.value = String(val);
+          ctrl.output.textContent = formatKnobValue(ctrl.knob, val);
+        }
+      }
+    }
+
+    // ------------------------------------------------------------------ Rendering
+    function requestBigRender({ immediate = false } = {}) {
+      clearTimeout(state.renderDebounce);
+      if (immediate) {
+        runBigRender();
+      } else {
+        state.renderDebounce = setTimeout(runBigRender, 200);
+      }
+    }
+
+    async function runBigRender() {
+      if (!state.photo) return;
+      const seq = ++state.renderSeq;
+      const photoId = state.photo.id;
+
+      els.previewUpdating.textContent = "Updating…";
+      els.previewUpdating.hidden = false;
+      setError(els.previewError, "");
+
+      try {
+        const res = await fetch("/api/render", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: photoId,
+            params: state.params,
+            ink: state.ink,
+            paper: state.paper,
+          }),
+        });
+
+        if (seq !== state.renderSeq) return;
+
+        if (!res.ok) {
+          const msg = await readErrorMessage(res, "Could not render preview. Try adjusting a slider again.");
+          setError(els.previewError, msg);
+          return;
+        }
+
+        const blob = await res.blob();
+        if (seq !== state.renderSeq) return;
+
+        const nextUrl = URL.createObjectURL(blob);
+        const prevUrl = state.labPreviewUrl;
+        state.labPreviewUrl = nextUrl;
+        refreshPreviewImage();
+        revokeUrl(prevUrl);
+      } catch {
+        if (seq !== state.renderSeq) return;
+        setError(els.previewError, "Could not reach the lab server to render the preview. Check that it is running.");
+      } finally {
+        if (seq === state.renderSeq) {
+          els.previewUpdating.hidden = true;
+        }
+      }
+    }
+
+    // ------------------------------------------------------------------ 6 Versions
+    function clearVersionThumbUrls() {
+      for (const url of state.thumbUrls) {
+        revokeUrl(url);
+      }
+      state.thumbUrls = [];
+    }
+
+    async function loadVersions() {
+      if (!state.photo) return;
+      const seq = ++state.versionsSeq;
+      const photoId = state.photo.id;
+
+      els.btnNewVersions.disabled = true;
+      els.versionsUpdating.hidden = false;
+      setError(els.versionsError, "");
+
+      try {
+        const list = await apiJson("/api/versions", {
+          id: photoId,
+          params: state.params,
+        });
+        if (seq !== state.versionsSeq) return;
+
+        state.versions = Array.isArray(list) ? list : [];
+        state.selectedVersionIndex = 0;
+        if (state.versions[0]) {
+          state.selectedLabel = state.versions[0].label;
+          updateSelectionStatus(`Selected version: ${state.selectedLabel}`);
+        }
+        renderVersionGridShell();
+        await renderVersionThumbnails(seq);
+      } catch (err) {
+        if (seq !== state.versionsSeq) return;
+        setError(els.versionsError, err.message || "Could not load versions. Try again.");
+      } finally {
+        if (seq === state.versionsSeq) {
+          els.btnNewVersions.disabled = false;
+          els.versionsUpdating.hidden = true;
+        }
+      }
+    }
+
+    function renderVersionGridShell() {
+      const existingImgs = Array.from(els.versionsGrid.querySelectorAll("img")).map((img) => img.src);
+      els.versionsGrid.textContent = "";
+
+      state.versions.forEach((ver, idx) => {
+        const tile = document.createElement("button");
+        tile.type = "button";
+        tile.className = "version-tile";
+        tile.dataset.index = String(idx);
+        tile.setAttribute("aria-pressed", String(idx === state.selectedVersionIndex));
+        if (idx === state.selectedVersionIndex) {
+          tile.classList.add("sel");
+        }
+
+        const img = document.createElement("img");
+        img.alt = ver.label;
+        if (existingImgs[idx]) {
+          img.src = existingImgs[idx];
+        } else {
+          img.hidden = true;
+        }
+
+        const label = document.createElement("em");
+        label.className = "tile-label";
+        label.textContent = ver.label;
+
+        tile.addEventListener("click", () => selectVersion(idx));
+        tile.append(img, label);
+        els.versionsGrid.appendChild(tile);
+      });
+    }
+
+    function updateVersionSelectionClasses() {
+      const tiles = els.versionsGrid.querySelectorAll(".version-tile");
+      tiles.forEach((tile, idx) => {
+        const selected = idx === state.selectedVersionIndex;
+        tile.classList.toggle("sel", selected);
+        tile.setAttribute("aria-pressed", String(selected));
+      });
+    }
+
+    function selectVersion(idx) {
+      const ver = state.versions[idx];
+      if (!ver) return;
+      state.selectedVersionIndex = idx;
+      state.selectedLabel = ver.label;
+      state.params = { ...ver.params };
+      syncSlidersFromParams();
+      updateVersionSelectionClasses();
+      updateSelectionStatus(`Selected version: ${ver.label}`);
+
+      if (state.previewMode === "affinity") {
+        state.previewMode = "lab";
+        updatePreviewToggle();
+      }
+      requestBigRender({ immediate: true });
+    }
+
+    async function renderVersionThumbnails(existingSeq) {
+      if (!state.photo || state.versions.length === 0) return;
+      const seq = existingSeq ?? ++state.versionsSeq;
+      const photoId = state.photo.id;
+
+      els.versionsUpdating.hidden = false;
+      setError(els.versionsError, "");
+
+      const tiles = Array.from(els.versionsGrid.querySelectorAll(".version-tile"));
+      const tasks = state.versions.map(async (ver, idx) => {
+        const res = await fetch("/api/render", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: photoId,
+            params: ver.params,
+            ink: state.ink,
+            paper: state.paper,
+            height: 360,
+          }),
+        });
+        if (seq !== state.versionsSeq) return;
+        if (!res.ok) {
+          throw new Error(await readErrorMessage(res, "Could not render version thumbnails."));
+        }
+        const blob = await res.blob();
+        if (seq !== state.versionsSeq) return;
+
+        const nextUrl = URL.createObjectURL(blob);
+        const prevUrl = state.thumbUrls[idx];
+        state.thumbUrls[idx] = nextUrl;
+
+        const tile = tiles[idx];
+        if (tile) {
+          const img = tile.querySelector("img");
+          if (img) {
+            img.src = nextUrl;
+            img.hidden = false;
+          }
+        }
+        revokeUrl(prevUrl);
+      });
+
+      try {
+        await Promise.all(tasks);
+      } catch (err) {
+        if (seq === state.versionsSeq) {
+          setError(els.versionsError, err.message || "Could not update version thumbnails.");
+        }
+      } finally {
+        if (seq === state.versionsSeq) {
+          els.versionsUpdating.hidden = true;
+        }
+      }
+    }
+
+    function scheduleVersionThumbnails() {
+      clearTimeout(state.colourThumbDebounce);
+      state.colourThumbDebounce = setTimeout(() => {
+        renderVersionThumbnails();
+      }, 250);
+    }
+
+    // ------------------------------------------------------------------ Tune for me
+    function stopTunePolling() {
+      clearTimeout(state.tuneTimer);
+      state.tuneTimer = null;
+      state.tuneJobId = null;
+      state.tuneRunning = false;
+      els.btnTune.disabled = false;
+      els.btnTune.textContent = "Tune for me";
+    }
+
+    async function startTune() {
+      if (!state.photo || state.tuneRunning) return;
+      state.tuneRunning = true;
+      els.btnTune.disabled = true;
+      els.btnTune.textContent = "Tuning…";
+
+      els.tuneBox.hidden = false;
+      els.tuneStatus.textContent = "Claude is comparing versions… round 1 of 3";
+      els.tuneNote.textContent = "";
+      els.tuneNote.hidden = true;
+      setError(els.tuneError, "");
+
+      const photoId = state.photo.id;
+
+      try {
+        const res = await apiJson("/api/tune", {
+          id: photoId,
+          params: state.params,
+          bg: state.bg,
+          ink: state.ink,
+          paper: state.paper,
+        });
+        if (!state.photo || state.photo.id !== photoId) return;
+        state.tuneJobId = res.job;
+        scheduleTunePoll(photoId, res.job);
+      } catch (err) {
+        stopTunePolling();
+        els.tuneBox.hidden = false;
+        els.tuneStatus.textContent = "";
+        setError(els.tuneError, err.message || "Could not start tuning. Try again.");
+      }
+    }
+
+    function scheduleTunePoll(photoId, jobId) {
+      clearTimeout(state.tuneTimer);
+      state.tuneTimer = setTimeout(() => pollTuneJob(photoId, jobId), 2000);
+    }
+
+    async function pollTuneJob(photoId, jobId) {
+      if (!state.photo || state.photo.id !== photoId || state.tuneJobId !== jobId) return;
+
+      try {
+        const job = await apiJson(`/api/job/${encodeURIComponent(jobId)}`);
+        if (!state.photo || state.photo.id !== photoId || state.tuneJobId !== jobId) return;
+
+        if (job.state === "running") {
+          const total = job.rounds || 3;
+          const current = Math.max(1, job.round || 0);
+          els.tuneStatus.textContent = `Claude is comparing versions… round ${current} of ${total}`;
+          if (job.note) {
+            els.tuneNote.textContent = job.note;
+            els.tuneNote.hidden = false;
+          }
+          scheduleTunePoll(photoId, jobId);
+          return;
+        }
+
+        if (job.state === "done") {
+          stopTunePolling();
+          els.tuneStatus.textContent = "Tuning finished.";
+          if (job.note) {
+            els.tuneNote.textContent = job.note;
+            els.tuneNote.hidden = false;
+          }
+          if (job.params) {
+            state.params = { ...state.params, ...job.params };
+            syncSlidersFromParams();
+            state.selectedVersionIndex = -1;
+            state.selectedLabel = "Tuned by Claude";
+            updateVersionSelectionClasses();
+            updateSelectionStatus("Tuned by Claude");
+            if (state.previewMode === "affinity") {
+              state.previewMode = "lab";
+              updatePreviewToggle();
+            }
+            requestBigRender({ immediate: true });
+          }
+          return;
+        }
+
+        stopTunePolling();
+        els.tuneStatus.textContent = "";
+        setError(els.tuneError, job.error || "Tuning stopped. Try again.");
+      } catch (err) {
+        stopTunePolling();
+        els.tuneStatus.textContent = "";
+        setError(els.tuneError, err.message || "Lost connection while tuning. Try again.");
+      }
+    }
+
+    // ------------------------------------------------------------------ Export (Lab)
+    function parseDispositionFilename(header, fallback) {
+      if (!header) return fallback;
+      const quoted = header.match(/filename="([^"]+)"/i);
+      if (quoted && quoted[1]) return quoted[1];
+      const plain = header.match(/filename=([^;\s]+)/i);
+      if (plain && plain[1]) return plain[1];
+      return fallback;
+    }
+
+    async function exportLab(format, triggerBtn) {
+      if (!state.photo) return;
+      const origText = triggerBtn.textContent;
+      triggerBtn.disabled = true;
+      triggerBtn.textContent = format === "json" ? "Saving…" : "Exporting…";
+      setError(els.exportError, "");
+      setError(els.previewError, "");
+
+      try {
+        const res = await fetch("/api/export", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: state.photo.id,
+            params: state.params,
+            ink: state.ink,
+            paper: state.paper,
+            bg: state.bg,
+            format,
+          }),
+        });
+
+        if (!res.ok) {
+          const msg = await readErrorMessage(res, "Could not export file. Try again.");
+          setError(els.exportError, msg);
+          if (triggerBtn === els.btnExportPng) {
+            setError(els.previewError, msg);
+          }
+          return;
+        }
+
+        const blob = await res.blob();
+        const fallbackName =
+          format === "json"
+            ? `${state.photo.name}-settings.json`
+            : format === "jpg"
+              ? `${state.photo.name}.jpg`
+              : `${state.photo.name}-cutout.png`;
+        const filename = parseDispositionFilename(res.headers.get("Content-Disposition"), fallbackName);
+
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } catch {
+        const msg = "Could not reach the lab server to export. Check that it is running, then try again.";
+        setError(els.exportError, msg);
+        if (triggerBtn === els.btnExportPng) {
+          setError(els.previewError, msg);
+        }
+      } finally {
+        triggerBtn.disabled = false;
+        triggerBtn.textContent = origText;
+      }
+    }
+
+    // ------------------------------------------------------------------ Affinity
+    async function checkAffinityStatus() {
+      clearTimeout(state.affinity.pollTimer);
+      try {
+        const data = await apiJson("/api/affinity/status");
+        state.affinity.connected = Boolean(data.connected);
+        state.affinity.message = data.message || (data.connected ? "Connected" : "Affinity is not connected.");
+        if (data.effects && typeof data.effects === "object") {
+          mergeEffectsSpec(data.effects);
+        }
+      } catch {
+        state.affinity.connected = false;
+        state.affinity.message = "Could not check Affinity status. Check that the lab server is running.";
+      }
+
+      renderAffinityStatus();
+
+      if (!state.affinity.connected) {
+        state.affinity.pollTimer = setTimeout(checkAffinityStatus, 10000);
+      }
+    }
+
+    function mergeEffectsSpec(spec) {
+      const prevKeys = JSON.stringify(Object.keys(state.affinity.effectsSpec));
+      const nextKeys = JSON.stringify(Object.keys(spec));
+      state.affinity.effectsSpec = spec;
+
+      for (const [effectId, effect] of Object.entries(spec)) {
+        if (!state.affinity.effectsState[effectId]) {
+          const entry = { on: false };
+          for (const [paramId, pSpec] of Object.entries(effect.params || {})) {
+            entry[paramId] = pSpec.default ?? pSpec.min ?? 0;
+          }
+          state.affinity.effectsState[effectId] = entry;
+        }
+      }
+
+      if (prevKeys !== nextKeys || els.affinityEffects.childElementCount === 0) {
+        buildAffinityEffectsUi();
+      }
+    }
+
+    function renderAffinityStatus() {
+      els.affinityDot.classList.toggle("connected", state.affinity.connected);
+      els.affinityMessage.textContent = state.affinity.connected
+        ? state.affinity.message || "Connected"
+        : state.affinity.message;
+      els.affinityConnectedUi.hidden = !state.affinity.connected;
+      els.affinityExports.hidden = !state.affinity.connected || !state.affinity.open;
+    }
+
+    function buildAffinityEffectsUi() {
+      els.affinityEffects.textContent = "";
+      const entries = Object.entries(state.affinity.effectsSpec);
+      els.affinityEffects.hidden = entries.length === 0;
+
+      for (const [effectId, effect] of entries) {
+        const item = document.createElement("div");
+        item.className = "effect-item";
+
+        const effectState = state.affinity.effectsState[effectId];
+        const checkLabel = document.createElement("label");
+        checkLabel.className = "check-row";
+
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = Boolean(effectState.on);
+
+        const titleSpan = document.createElement("span");
+        titleSpan.textContent = effect.label || effectId;
+        checkLabel.append(checkbox, titleSpan);
+
+        const paramsWrap = document.createElement("div");
+        paramsWrap.className = "effect-params";
+        paramsWrap.hidden = !effectState.on;
+
+        for (const [paramId, pSpec] of Object.entries(effect.params || {})) {
+          const knob = document.createElement("div");
+          knob.className = "knob";
+
+          const inputId = `aff-${effectId}-${paramId}`;
+          const lbl = document.createElement("label");
+          lbl.htmlFor = inputId;
+          lbl.textContent = pSpec.label || paramId;
+
+          const out = document.createElement("output");
+          out.htmlFor = inputId;
+          out.textContent = formatEffectParam(pSpec, effectState[paramId]);
+
+          const range = document.createElement("input");
+          range.type = "range";
+          range.id = inputId;
+          range.min = String(pSpec.min ?? 0);
+          range.max = String(pSpec.max ?? 100);
+          range.step = String(pSpec.step ?? 1);
+          range.value = String(effectState[paramId]);
+
+          range.addEventListener("input", () => {
+            const val = Number(range.value);
+            effectState[paramId] = val;
+            out.textContent = formatEffectParam(pSpec, val);
+            if (state.affinity.open) {
+              scheduleAffinityEffectsUpdate();
+            }
+          });
+
+          knob.append(lbl, out, range);
+          paramsWrap.appendChild(knob);
+        }
+
+        checkbox.addEventListener("change", () => {
+          effectState.on = checkbox.checked;
+          paramsWrap.hidden = !checkbox.checked;
+          if (state.affinity.open) {
+            scheduleAffinityEffectsUpdate();
+          }
+        });
+
+        item.append(checkLabel, paramsWrap);
+        els.affinityEffects.appendChild(item);
+      }
+    }
+
+    function getEffectsPayload() {
+      const out = {};
+      for (const [effectId, val] of Object.entries(state.affinity.effectsState)) {
+        out[effectId] = { ...val };
+      }
+      return out;
+    }
+
+    async function openInAffinity() {
+      if (!state.photo) return;
+      const photoId = state.photo.id;
+      const seq = ++state.affinity.seq;
+
+      els.btnAffinityOpen.disabled = true;
+      els.btnAffinityOpen.textContent = "Opening in Affinity…";
+      setError(els.affinityError, "");
+      setError(els.affinityExportError, "");
+      els.affinityExportPath.hidden = true;
+
+      try {
+        await apiJson("/api/affinity/open", {
+          id: photoId,
+          params: state.params,
+          ink: state.ink,
+          paper: state.paper,
+          bg: state.bg,
+          effects: getEffectsPayload(),
+        });
+        if (!state.photo || state.photo.id !== photoId || seq !== state.affinity.seq) return;
+
+        state.affinity.open = true;
+        els.affinityExports.hidden = false;
+        updatePreviewToggle();
+
+        await fetchAffinityPreview(photoId, seq, true);
+      } catch (err) {
+        if (seq !== state.affinity.seq) return;
+        setError(els.affinityError, err.message || "Could not open in Affinity. Check that Affinity is running.");
+      } finally {
+        if (seq === state.affinity.seq) {
+          els.btnAffinityOpen.disabled = false;
+          els.btnAffinityOpen.textContent = "Open in Affinity with layers";
+        }
+      }
+    }
+
+    function scheduleAffinityEffectsUpdate() {
+      clearTimeout(state.affinity.effectsDebounce);
+      state.affinity.effectsDebounce = setTimeout(applyAffinityEffects, 400);
+    }
+
+    async function applyAffinityEffects() {
+      if (!state.photo || !state.affinity.open) return;
+      const photoId = state.photo.id;
+      const seq = ++state.affinity.seq;
+
+      els.affinityUpdating.textContent = "Updating Affinity preview…";
+      els.affinityUpdating.hidden = false;
+      els.previewUpdating.textContent = "Updating…";
+      els.previewUpdating.hidden = false;
+      setError(els.affinityError, "");
+
+      try {
+        await apiJson("/api/affinity/effects", {
+          id: photoId,
+          effects: getEffectsPayload(),
+        });
+        if (!state.photo || state.photo.id !== photoId || seq !== state.affinity.seq) return;
+
+        await fetchAffinityPreview(photoId, seq, true);
+      } catch (err) {
+        if (seq !== state.affinity.seq) return;
+        setError(els.affinityError, err.message || "Could not update Affinity effects. Try again.");
+      } finally {
+        if (seq === state.affinity.seq) {
+          els.affinityUpdating.hidden = true;
+          els.previewUpdating.hidden = true;
+        }
+      }
+    }
+
+    async function fetchAffinityPreview(photoId, seq, switchToAffinity) {
+      els.affinityUpdating.textContent = "Updating Affinity preview…";
+      els.affinityUpdating.hidden = false;
+      els.previewUpdating.textContent = "Updating…";
+      els.previewUpdating.hidden = false;
+
+      try {
+        const res = await apiJson("/api/affinity/preview", { id: photoId });
+        if (!state.photo || state.photo.id !== photoId || seq !== state.affinity.seq) return;
+        if (res && res.jpeg) {
+          state.affinityPreviewUrl = `data:image/jpeg;base64,${res.jpeg}`;
+          if (switchToAffinity) {
+            state.previewMode = "affinity";
+          }
+          updatePreviewToggle();
+          refreshPreviewImage();
+        }
+      } catch (err) {
+        if (seq !== state.affinity.seq) return;
+        setError(els.affinityError, err.message || "Could not load Affinity preview. Try again.");
+      } finally {
+        if (seq === state.affinity.seq) {
+          els.affinityUpdating.hidden = true;
+          els.previewUpdating.hidden = true;
+        }
+      }
+    }
+
+    async function exportFromAffinity(format, triggerBtn) {
+      if (!state.photo || !state.affinity.open) return;
+      const photoId = state.photo.id;
+      const origText = triggerBtn.textContent;
+
+      affinityExportButtons.forEach((b) => { b.disabled = true; });
+      triggerBtn.textContent = "Exporting…";
+      setError(els.affinityExportError, "");
+      els.affinityExportPath.hidden = true;
+
+      try {
+        const res = await apiJson("/api/affinity/export", { id: photoId, format });
+        if (!state.photo || state.photo.id !== photoId) return;
+        els.affinityExportPath.textContent = `Saved to ${res.path}`;
+        els.affinityExportPath.hidden = false;
+      } catch (err) {
+        setError(els.affinityExportError, err.message || "Could not export from Affinity. Try again.");
+      } finally {
+        triggerBtn.textContent = origText;
+        affinityExportButtons.forEach((b) => { b.disabled = false; });
+      }
+    }
+
+    // ------------------------------------------------------------------ Event wiring
+    function openFilePicker() {
+      els.fileInput.value = "";
+      els.fileInput.click();
+    }
+
+    els.btnChooseEmpty.addEventListener("click", openFilePicker);
+    els.btnChooseAnother.addEventListener("click", openFilePicker);
+    els.btnChooseError.addEventListener("click", openFilePicker);
+
+    els.btnRetryAuto.addEventListener("click", () => {
+      if (state.file) importPhoto(state.file, "auto", true);
+    });
+    els.btnRetryObject.addEventListener("click", () => {
+      if (state.file) importPhoto(state.file, "object", true);
+    });
+
+    els.fileInput.addEventListener("change", () => {
+      const file = els.fileInput.files && els.fileInput.files[0];
+      if (file) {
+        importPhoto(file, state.subject, false);
+      }
+    });
+
+    // Drag and drop on window & stage
+    let dragDepth = 0;
+    window.addEventListener("dragenter", (e) => {
+      if (!e.dataTransfer || !Array.from(e.dataTransfer.types).includes("Files")) return;
+      e.preventDefault();
+      dragDepth += 1;
+      els.bigStage.classList.add("is-dragover");
+    });
+
+    window.addEventListener("dragover", (e) => {
+      if (!e.dataTransfer || !Array.from(e.dataTransfer.types).includes("Files")) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+    });
+
+    window.addEventListener("dragleave", (e) => {
+      if (!e.dataTransfer || !Array.from(e.dataTransfer.types).includes("Files")) return;
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (dragDepth === 0) {
+        els.bigStage.classList.remove("is-dragover");
+      }
+    });
+
+    window.addEventListener("drop", (e) => {
+      if (!e.dataTransfer || !e.dataTransfer.files || e.dataTransfer.files.length === 0) return;
+      e.preventDefault();
+      dragDepth = 0;
+      els.bigStage.classList.remove("is-dragover");
+      const file = e.dataTransfer.files[0];
+      if (file) {
+        importPhoto(file, state.subject, false);
+      }
+    });
+
+    els.btnNewVersions.addEventListener("click", () => loadVersions());
+    els.btnTune.addEventListener("click", () => startTune());
+    els.btnExportPng.addEventListener("click", () => exportLab("png", els.btnExportPng));
+    els.btnExportJpg.addEventListener("click", () => exportLab("jpg", els.btnExportJpg));
+    els.btnExportJson.addEventListener("click", () => exportLab("json", els.btnExportJson));
+
+    els.btnMoreSettings.addEventListener("click", () => {
+      state.moreOpen = !state.moreOpen;
+      els.knobsExtra.hidden = !state.moreOpen;
+      els.btnMoreSettings.setAttribute("aria-expanded", String(state.moreOpen));
+      els.btnMoreSettings.textContent = state.moreOpen ? "Less settings ▴" : "More settings ▾";
+    });
+
+    subjectButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const nextSubject = btn.dataset.subject;
+        if (!nextSubject || nextSubject === state.subject) return;
+        if (!state.file) {
+          state.subject = nextSubject;
+          updateSubjectButtons();
+          return;
+        }
+        importPhoto(state.file, nextSubject, true);
+      });
+    });
+
+    els.colourBg.addEventListener("input", () => {
+      state.bg = els.colourBg.value;
+      document.documentElement.style.setProperty("--event", state.bg);
+    });
+
+    function onInkOrPaperChange() {
+      state.ink = els.colourInk.value;
+      state.paper = els.colourPaper.value;
+      if (state.previewMode === "affinity") {
+        state.previewMode = "lab";
+        updatePreviewToggle();
+        refreshPreviewImage();
+      }
+      requestBigRender({ immediate: false });
+      scheduleVersionThumbnails();
+    }
+
+    els.colourInk.addEventListener("input", onInkOrPaperChange);
+    els.colourPaper.addEventListener("input", onInkOrPaperChange);
+
+    els.btnModeLab.addEventListener("click", () => {
+      state.previewMode = "lab";
+      updatePreviewToggle();
+      refreshPreviewImage();
+    });
+
+    els.btnModeAffinity.addEventListener("click", () => {
+      if (!state.affinityPreviewUrl) return;
+      state.previewMode = "affinity";
+      updatePreviewToggle();
+      refreshPreviewImage();
+    });
+
+    els.btnAffinityOpen.addEventListener("click", () => openInAffinity());
+
+    affinityExportButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const fmt = btn.dataset.affExport;
+        if (fmt) exportFromAffinity(fmt, btn);
+      });
+    });
+
+    // Init
+    updateScreen();
+    checkAffinityStatus();
+  </script>
+</body>
+</html>

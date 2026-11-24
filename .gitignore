@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+out/
+models/
+*.pyc
+.DS_Store
+.gstack/
+
+# Kept on this machine only: style references from real event graphics, internal notes.
+reference/local/
+private/
