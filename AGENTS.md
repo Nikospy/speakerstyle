@@ -72,7 +72,7 @@ End by writing down, for them, the 2–3 commands they will use again, with thei
 |---|---|
 | `-> rejected` for a photo | Read `NAME.json`, key `gate.problems`. Usually the photo or the face is too small. Ask for a bigger photo. |
 | `-> needs_review` for a photo | Read `NAME.json`, key `metrics.flags` (also shown under the image in `index.html`). Look at the image before you worry: "cut-out touches the frame edges" is often just a wide jacket or a tight crop. |
-| The person looks blotchy, or the eyes sink into black | Suggest **Crisper features** or **Lighter** in the lab, or lower **Black**. With darker skin, raise **Smooth skin** and **White**. |
+| The person looks blotchy, or the eyes sink into black | Suggest **Crisper features** or **Lighter** in the lab, or lower **Black**. With darker skin, raise **White** and **Shadow detail** (with **No brush strokes**, also **Smooth skin**). |
 | A portrait is treated as an object, or the reverse | Switch **Subject** in the lab, or add `--subject face` or `--subject object`. A portrait needs the face to be at least 10% of the photo height. |
 | **Tune for me** or `process` says Claude Code is needed | Claude Code is not installed or not signed in. `process` then tunes by rules only. Everything else works. |
 | Affinity does not connect | Affinity 3.3 or newer must be open, with **Settings → Model Context Protocol → Enable Affinity MCP** turned on and the app restarted. The server is `http://localhost:6767/sse`. |

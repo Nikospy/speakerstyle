@@ -173,6 +173,8 @@ def first_round(base: P.Params) -> list[P.Params]:
 
 
 def next_round(best: P.Params, adjust: dict, scale: float) -> list[P.Params]:
+    # with brush strokes on, some sliders do nothing: moving them would only fill the sheet with twins
+    adjust = {k: v for k, v in adjust.items() if not (best.paint and k in P.PAINT_IGNORES)}
     moved = {k: getattr(best, k) + int(v) * STEPS[k] * scale for k, v in adjust.items() if int(v)}
     center = bounded(replace(best, **moved)) if moved else best
     keys = [k for k, v in adjust.items() if int(v)] or ["ink", "paper"]

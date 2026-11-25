@@ -110,8 +110,9 @@ class Params:
     @classmethod
     def for_kind(cls, kind: str) -> "Params":
         # objects: the portrait's strand strokes turn foil, stone and ceramic into speckle; the judge
-        # moved fine down and smooth up on every object sample, so start there
-        return cls(fine=0.5, smooth=0.6) if kind == "object" else cls()
+        # moved fine down and smooth up on every object sample, so start there. Brush strokes are
+        # tuned on portraits and turn most objects too dark, so objects keep the smoothing renderer.
+        return cls(fine=0.5, smooth=0.6) if kind == "object" else cls(paint=1.0, grey=0.30, outline=1.0)
 
 
 # --------------------------------------------------------------------------- gate
@@ -518,6 +519,7 @@ PAINT_STYLE_INK, PAINT_STYLE_GREY = 2.1, 7.1
 PAINT_INK, PAINT_PAPER = 0.610, 0.796  # thresholds as a share of the white point (template: 138, 180)
 PAINT_Q_INK, PAINT_Q_PAPER = 0.29, 0.45  # the shares those thresholds give on the template photo
 PAINT_HP_R, PAINT_LINE = 0.0055, 0.0265  # High Pass radius; line = this much darker than surroundings
+PAINT_IGNORES = ("detail", "fine", "skin_smooth")  # sliders the brush renderer does not use
 
 
 def _shadows_lift(L: np.ndarray, face_h: float, amount: float) -> np.ndarray:
@@ -567,7 +569,7 @@ def _strokes(L: np.ndarray, tx: np.ndarray, ty: np.ndarray, half: float) -> np.n
 
 def _zones_paint(p: Prepared, prm: Params) -> tuple[np.ndarray, dict]:
     """Slider meaning here: pop = shadow lift (0.5 = the template's 100%), smooth = stroke length,
-    ink_lines = line sensitivity. detail, fine and skin_smooth have no effect."""
+    ink_lines = line sensitivity. PAINT_IGNORES have no effect."""
     fh = p.face_h
     inside = p.alpha > 0.5
     L = _shadows_lift(p.lum.astype(np.float32), fh, 2 * prm.pop)

@@ -45,7 +45,7 @@ For finer control of dots, outlines and texture, open **More settings**. It has 
 
 ### Brush strokes
 
-The **Brush strokes** version draws the picture another way: hair, beards and fabric turn into streaks, as with a painting filter, instead of smooth patches, and thin lines trace glasses, ears and folds over the whole person. It also adds an outline and lighter dots. It is tuned for portraits. On the command line: `--params '{"paint":1,"grey":0.3,"outline":1}'`. With brush strokes on, **Shadow detail** lightens dark areas, **Smooth shapes** sets the stroke length and **Feature lines** sets how many lines appear; **Hair and fabric lines**, **Smooth skin** and **Local contrast** do nothing.
+Portraits use brush strokes by default: hair, beards and fabric turn into streaks, as with a painting filter, instead of smooth patches, and thin lines trace glasses, ears and folds over the whole person, with an outline and lighter dots. Objects use smooth shapes, because brush strokes turn most objects too dark. To switch, pick the **Brush strokes** or **No brush strokes** version in the lab, or set **Brush strokes** to 1 or 0 under **More settings**. On the command line: `--params '{"paint":0,"grey":0.4,"outline":0}'` turns them off for a portrait, `--params '{"paint":1,"grey":0.3,"outline":1}'` turns them on for an object. With brush strokes on, **Shadow detail** lightens dark areas, **Smooth shapes** sets the stroke length and **Feature lines** sets how many lines appear; **Hair and fabric lines**, **Smooth skin** and **Local contrast** do nothing.
 
 ### Let Claude tune it
 
