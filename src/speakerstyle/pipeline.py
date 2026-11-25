@@ -110,9 +110,11 @@ class Params:
     @classmethod
     def for_kind(cls, kind: str) -> "Params":
         # objects: the portrait's strand strokes turn foil, stone and ceramic into speckle; the judge
-        # moved fine down and smooth up on every object sample, so start there. Brush strokes are
-        # tuned on portraits and turn most objects too dark, so objects keep the smoothing renderer.
-        return cls(fine=0.5, smooth=0.6) if kind == "object" else cls(paint=1.0, grey=0.30, outline=1.0)
+        # moved fine down and smooth up on every object sample, so start there (with brush strokes,
+        # smooth = longer strokes). Both kinds use brush strokes: on objects they lose only fine
+        # printed text and thin dark parts, which "No brush strokes" in the lab brings back.
+        brush = dict(paint=1.0, grey=0.30, outline=1.0)
+        return cls(fine=0.5, smooth=0.6, **brush) if kind == "object" else cls(**brush)
 
 
 # --------------------------------------------------------------------------- gate

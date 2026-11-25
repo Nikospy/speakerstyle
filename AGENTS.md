@@ -101,6 +101,6 @@ Map of the project:
 
 There is no test suite. To check a change:
 
-1. Run `uv run speakerstyle render samples/ samples/objects/ --out out/check` once before your change and once after it (use another `--out` folder). Compare the statuses and the images in each `index.html`. Before any change, `deg-lowres.jpg` is rejected and two NASA portraits (`jsc2024…`, `jsc2025…`) and `obj-6872212.jpg` (an astronaut in a helmet) come out `needs_review`; everything else is `ok`.
+1. Run `uv run speakerstyle render samples/ samples/objects/ --out out/check` once before your change and once after it (use another `--out` folder). Compare the statuses and the images in each `index.html`. Before any change, `deg-lowres.jpg` is rejected and two NASA portraits (`jsc2024…`, `jsc2025…`) `obj-6872212.jpg` (an astronaut in a helmet) and `obj-PIA23882.jpg` (a helicopter with thin dark blades) come out `needs_review`; everything else is `ok`.
 2. If you changed the lab, open it and go through one photo: import, pick a version, move a slider, export.
 3. A change to how images look needs a person's eye. Show a before and after of the same photos.
