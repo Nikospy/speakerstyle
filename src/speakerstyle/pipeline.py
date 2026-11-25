@@ -75,8 +75,12 @@ class Params:
     skin_smooth: float = 1.0  # extra flattening on the skin only, so the face stays clean
     tone_keep: float = 0.5    # 0 = every face forced to the same ink/paper shares; 1 = thresholds fixed
                               # relative to the photo's white point, so darker skin stays darker
+    paint: float = 0.0        # 1 = brush-stroke renderer (see _zones_paint), 0 = smoothing renderer
+    outline: float = 0.0      # black rim inside the silhouette edge, 1 = about 1 px on a 1000 px portrait
 
     def clamp(self) -> "Params":
+        self.paint = 1.0 if self.paint >= 0.5 else 0.0
+        self.outline = float(np.clip(self.outline, 0, 3))
         self.ink = float(np.clip(self.ink, 0.02, 0.45))
         self.paper = float(np.clip(self.paper, 0.10, 0.75))
         if self.ink + self.paper > 0.92:
@@ -492,16 +496,106 @@ def _despeckle(zone: np.ndarray, prm: Params, p: Prepared) -> np.ndarray:
     return out
 
 
-def render(p: Prepared, prm: Params) -> tuple[np.ndarray, dict]:
-    """Returns tone image (float32, 0 = ink, 1 = paper) at working size, plus info."""
-    prm = prm.clamp()
+def _zones_classic(p: Prepared, prm: Params) -> tuple[np.ndarray, dict]:
     L, th = tone_map(p, prm)
     zone = np.where(L < th["t_ink"], 0, np.where(L < th["t_paper"], 1, 2)).astype(np.uint8)
     if prm.ink_lines > 0:
         lines = _ink_lines(p, prm) > 0.5
         zone[lines & (zone == 1)] = 0
         zone[lines & (zone == 2) & (_ink_lines(p, prm) > 0.9)] = 1
-    zone = _rescue_eyes(zone, p)
+    return _rescue_eyes(zone, p), th
+
+
+# Brush-stroke renderer: the filter stack of the designer's Photoshop template, rebuilt here.
+# Each level gets its own copy of the photo: Shadows/Highlights -> noise reduction -> Oil Paint ->
+# Threshold. The grey level's Oil Paint is about 3x stronger than the black level's, so grey sits in
+# big calm patches while black keeps detail. A third copy (High Pass -> Threshold) draws thin lines
+# over the whole subject. All sizes below are in face heights, measured on the template.
+PAINT_LIFT_R, PAINT_LIFT_W, PAINT_LIFT_GAIN = 0.057, 0.65, 3.0   # Shadows/Highlights: radius, tonal width
+PAINT_FLOW_SIGMA = 0.010         # how far stroke direction is averaged
+PAINT_STROKE = 0.0035            # stroke half-length per unit of Oil Paint "stylization"
+PAINT_STYLE_INK, PAINT_STYLE_GREY = 2.1, 7.1
+PAINT_INK, PAINT_PAPER = 0.610, 0.796  # thresholds as a share of the white point (template: 138, 180)
+PAINT_Q_INK, PAINT_Q_PAPER = 0.29, 0.45  # the shares those thresholds give on the template photo
+PAINT_HP_R, PAINT_LINE = 0.0055, 0.0265  # High Pass radius; line = this much darker than surroundings
+
+
+def _shadows_lift(L: np.ndarray, face_h: float, amount: float) -> np.ndarray:
+    """Like Photoshop's Shadows/Highlights (shadows only): brightens pixels whose neighbourhood is dark."""
+    M = cv2.GaussianBlur(L, (0, 0), PAINT_LIFT_R * face_h)
+    w = np.clip(1 - M / PAINT_LIFT_W, 0, 1)
+    w = w * w * (3 - 2 * w)
+    return 1 - (1 - L) ** (1 + PAINT_LIFT_GAIN * amount * w)
+
+
+def _stroke_field(L: np.ndarray, face_h: float) -> tuple[np.ndarray, np.ndarray]:
+    """Unit vectors along edges (perpendicular to the smoothed gradient): the direction of brush strokes."""
+    s = PAINT_FLOW_SIGMA * face_h
+    gx = cv2.Sobel(L, cv2.CV_32F, 1, 0, ksize=3)
+    gy = cv2.Sobel(L, cv2.CV_32F, 0, 1, ksize=3)
+    j11 = cv2.GaussianBlur(gx * gx, (0, 0), s)
+    j12 = cv2.GaussianBlur(gx * gy, (0, 0), s)
+    j22 = cv2.GaussianBlur(gy * gy, (0, 0), s)
+    th = 0.5 * np.arctan2(2 * j12, j11 - j22) + np.pi / 2
+    return np.cos(th).astype(np.float32), np.sin(th).astype(np.float32)
+
+
+def _strokes(L: np.ndarray, tx: np.ndarray, ty: np.ndarray, half: float) -> np.ndarray:
+    """Averages each pixel along its stroke line (line integral convolution): the Oil Paint look,
+    where hair and fabric turn into streaks instead of blobs."""
+    n = int(round(half))
+    if n < 1:
+        return L
+    H, W = L.shape
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    sig = max(half / 2, 0.5)
+    acc, wsum = L.copy(), 1.0
+    for sign in (1, -1):
+        px, py, vx, vy = xx.copy(), yy.copy(), tx * sign, ty * sign
+        for k in range(1, n + 1):
+            px += vx
+            py += vy
+            nx = cv2.remap(tx, px, py, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT)
+            ny = cv2.remap(ty, px, py, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT)
+            flip = np.where(nx * vx + ny * vy < 0, -1.0, 1.0).astype(np.float32)  # the field has no sign
+            vx, vy = nx * flip, ny * flip
+            wk = float(np.exp(-k * k / (2 * sig * sig)))
+            acc += wk * cv2.remap(L, px, py, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT)
+            wsum += wk
+    return acc / wsum
+
+
+def _zones_paint(p: Prepared, prm: Params) -> tuple[np.ndarray, dict]:
+    """Slider meaning here: pop = shadow lift (0.5 = the template's 100%), smooth = stroke length,
+    ink_lines = line sensitivity. detail, fine and skin_smooth have no effect."""
+    fh = p.face_h
+    inside = p.alpha > 0.5
+    L = _shadows_lift(p.lum.astype(np.float32), fh, 2 * prm.pop)
+    L = cv2.bilateralFilter(L, 0, 0.06, fh * 0.006)  # the template's Camera Raw noise reduction
+    wp = float(np.percentile(L[inside], 99.5)) if inside.any() else 1.0
+    tx, ty = _stroke_field(L, fh)
+    length = PAINT_STROKE * fh * (0.5 + 2 * prm.smooth)
+    Lk = _strokes(L, tx, ty, PAINT_STYLE_INK * length)
+    Lg = _strokes(L, tx, ty, PAINT_STYLE_GREY * length)
+    t_ink = wp * (PAINT_INK + (prm.ink - 0.14) * 1.2)
+    t_paper = wp * (PAINT_PAPER - (prm.paper - 0.43) * 0.8)
+    if prm.tone_keep < 1:  # as in tone_map: blend with thresholds that hit target shares on the face
+        sel = p.face_mask if p.face_mask.sum() >= 100 else inside
+        q_ink = float(np.quantile(Lk[sel], np.clip(PAINT_Q_INK + prm.ink - 0.14, 0.01, 0.9)))
+        q_paper = float(np.quantile(Lg[sel], np.clip(1 - PAINT_Q_PAPER - (prm.paper - 0.43), 0.05, 0.99)))
+        k = prm.tone_keep
+        t_ink, t_paper = k * t_ink + (1 - k) * q_ink, k * t_paper + (1 - k) * q_paper
+    zone = np.where(Lk < t_ink, 0, np.where(Lg < t_paper, 1, 2)).astype(np.uint8)
+    if prm.ink_lines > 0:
+        hp = L - cv2.GaussianBlur(L, (0, 0), PAINT_HP_R * fh)
+        zone[hp < -wp * PAINT_LINE * 1.3 / prm.ink_lines] = 0
+    return zone, {"t_ink": t_ink, "t_paper": t_paper}
+
+
+def render(p: Prepared, prm: Params) -> tuple[np.ndarray, dict]:
+    """Returns tone image (float32, 0 = ink, 1 = paper) at working size, plus info."""
+    prm = prm.clamp()
+    zone, th = (_zones_paint if prm.paint else _zones_classic)(p, prm)
     zone = _despeckle(zone, prm, p)
 
     # supersample: smooth zone boundaries with a blurred per-level indicator, then screen dots
@@ -526,7 +620,12 @@ def render(p: Prepared, prm: Params) -> tuple[np.ndarray, dict]:
         dots = 1 - (np.sqrt(du2 ** 2 + dv2 ** 2) < np.sqrt((1 - prm.grey) / np.pi)).astype(np.float32)
 
     solid = (zs == 0).astype(np.float32)
-    dotted = np.where(zs == 1, dots, 0.0).astype(np.float32)
+    if prm.outline > 0:  # the template's 1 px inner stroke, drawn at the supersampled size
+        sil = cv2.resize((p.alpha > 0.5).astype(np.uint8), (Ws, Hs), interpolation=cv2.INTER_NEAREST)
+        r = max(1, int(round(prm.outline * p.face_h / 527 * SS)))
+        rim = sil - cv2.erode(sil, np.ones((2 * r + 1, 2 * r + 1), np.uint8))
+        solid = np.maximum(solid, rim.astype(np.float32))
+    dotted = np.where(zs == 1, dots, 0.0).astype(np.float32) * (1 - solid)
     down = lambda a: cv2.resize(a, (W, H), interpolation=cv2.INTER_AREA)
     ink_solid, ink_dots = down(solid), down(dotted)
     tone = 1 - (ink_solid + ink_dots)

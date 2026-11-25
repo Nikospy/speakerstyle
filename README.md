@@ -41,7 +41,11 @@ The first start takes a minute while uv installs the dependencies. The first por
 | **Shadow detail** | bring hair strands and features out of dark areas |
 | **Dot darkness** | make the grey dots bigger, so the grey looks darker |
 
-For finer control of dots, outlines and texture, open **More settings**. It has 8 more sliders: **Dot size**, **Screen angle**, **Smooth shapes**, **Feature lines** (eyes, lips, nostrils), **Hair and fabric lines**, **Smooth skin** (portraits only), **Local contrast** and **Clean up specks**.
+For finer control of dots, outlines and texture, open **More settings**. It has 10 more sliders: **Dot size**, **Screen angle**, **Smooth shapes**, **Feature lines** (eyes, lips, nostrils), **Hair and fabric lines**, **Smooth skin** (portraits only), **Local contrast**, **Clean up specks**, **Outline** (a thin black rim around the cut-out) and **Brush strokes**.
+
+### Brush strokes
+
+The **Brush strokes** version draws the picture another way: hair, beards and fabric turn into streaks, as with a painting filter, instead of smooth patches, and thin lines trace glasses, ears and folds over the whole person. It also adds an outline and lighter dots. It is tuned for portraits. On the command line: `--params '{"paint":1,"grey":0.3,"outline":1}'`. With brush strokes on, **Shadow detail** lightens dark areas, **Smooth shapes** sets the stroke length and **Feature lines** sets how many lines appear; **Hair and fabric lines**, **Smooth skin** and **Local contrast** do nothing.
 
 ### Let Claude tune it
 

@@ -44,6 +44,8 @@ KNOBS = [
     ("skin_smooth", "Smooth skin", 0.0, 2.0, 0.05, False, True),
     ("detail", "Local contrast", 0.0, 2.0, 0.05, False, False),
     ("despeckle", "Clean up specks", 0.0, 1.5, 0.05, False, False),
+    ("outline", "Outline", 0.0, 3.0, 0.25, False, False),
+    ("paint", "Brush strokes (1 = on)", 0.0, 1.0, 1.0, False, False),
 ]
 
 # The six versions to pick from: named moves away from the current settings.
@@ -52,9 +54,11 @@ VERSIONS = [
     ("More black", {"ink": +0.05}),
     ("Lighter", {"ink": -0.04, "paper": +0.08}),
     ("Smoother", {"smooth": +0.4, "fine": -0.6, "despeckle": +0.3}),
-    ("Coarser dots", {"dot_cell": +0.004, "grey": +0.06}),
     ("Crisper features", {"ink_lines": +0.6, "pop": +0.4}),
+    ("Brush strokes", {"paint": +1, "grey": -0.10, "outline": +1}),
 ]
+# Shown instead of "Brush strokes" when the current settings already use them.
+UNDO_PAINT = ("No brush strokes", {"paint": -1, "grey": +0.10, "outline": -1})
 
 
 @dataclasses.dataclass
@@ -157,6 +161,8 @@ def render_png(photo: Photo, prm: P.Params, ink: str, paper: str, height: int | 
 def versions(photo: Photo, base: P.Params) -> list[dict]:
     out = []
     for label, moves in VERSIONS:
+        if "paint" in moves and base.paint:
+            label, moves = UNDO_PAINT
         p = dataclasses.replace(base, **{k: getattr(base, k) + v for k, v in moves.items()}).clamp()
         out.append({"label": label, "params": p.to_dict()})
     return out
